@@ -27,3 +27,4 @@ Thumbs.db
 models/
 .npu-optimize/
 tmp/
+dist/
