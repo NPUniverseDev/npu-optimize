@@ -4,8 +4,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -35,25 +37,55 @@ func newMockHW(vramFreeMB int64) *hwinfo.Info {
 }
 
 func buildModel(id, file string, createdAt time.Time, tags []string, size int64) hfclient.ModelInfo {
-	m := hfclient.ModelInfo{
+	return hfclient.ModelInfo{
 		ID:          id,
 		ModelID:     id,
 		CreatedAt:   createdAt,
 		PipelineTag: "text-generation",
 		Tags:        tags,
 		Siblings: []hfclient.Sibling{
-			{
-				RFilename: "readme.md",
-				Type:      "file",
-			},
-			{
-				RFilename: file,
-				Type:      "file",
-				Size:      &size,
-			},
+			{RFilename: "readme.md", Type: "file"},
+			{RFilename: file, Type: "file"},
 		},
 	}
-	return m
+}
+
+func handlePathsInfo(w http.ResponseWriter, r *http.Request) {
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	var req hfclient.PathsInfoRequest
+	if err := json.Unmarshal(body, &req); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	entries := make([]hfclient.PathsInfoEntry, 0, len(req.Paths))
+	for _, p := range req.Paths {
+		var size int64
+		if strings.Contains(p, "q4_k_m") {
+			size = 500_000_000
+		} else if strings.Contains(p, "q2_k") {
+			size = 300_000_000
+		} else if strings.Contains(p, "q8_0") {
+			size = 900_000_000
+		} else if strings.Contains(p, "f16") {
+			size = 1_500_000_000
+		} else if strings.Contains(p, "small") {
+			size = 100_000_000
+		} else {
+			size = 400_000_000
+		}
+		entries = append(entries, hfclient.PathsInfoEntry{
+			Path: p,
+			LFS:  &hfclient.LFS{Size: size, OID: "abc"},
+		})
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(entries)
 }
 
 func TestRecommend_Success(t *testing.T) {
@@ -88,15 +120,10 @@ func TestRecommend_Success(t *testing.T) {
 			}
 			searchCalls.Add(1)
 
-		case r.URL.Path == "/api/models/test/model-q4km/tree/main":
-			w.Header().Set("Content-Type", "application/json")
-			entries := []hfclient.TreeEntry{
-				{Name: "model-q4_k_m.gguf", Type: "file", LFS: &hfclient.LFS{Size: 500_000_000, OID: "abc"}},
-			}
-			json.NewEncoder(w).Encode(entries)
+		case strings.HasSuffix(r.URL.Path, "/paths-info/main"):
+			handlePathsInfo(w, r)
 
 		default:
-			// GGUF header download
 			headerData := buildGGUF(map[string]any{
 				"general.architecture":          "llama",
 				"llama.block_count":             uint32(32),
@@ -135,6 +162,149 @@ func TestRecommend_Success(t *testing.T) {
 	assert.Equal(t, 32, rec.Header.NLayer)
 	assert.Equal(t, "llama", rec.Header.Architecture)
 	assert.GreaterOrEqual(t, searchCalls.Load(), int32(1))
+}
+
+func TestRecommend_BestFitSelectsLargest(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.URL.Path == "/api/models":
+			w.Header().Set("Content-Type", "application/json")
+			models := []hfclient.ModelInfo{
+				buildModel("repo/small", "small-q4_k_m.gguf", time.Now(),
+					[]string{"gguf", "base_model"}, 0),
+				buildModel("repo/medium", "medium-q4_k_m.gguf", time.Now(),
+					[]string{"gguf", "base_model"}, 0),
+				buildModel("repo/large", "large-q4_k_m.gguf", time.Now(),
+					[]string{"gguf", "base_model"}, 0),
+			}
+			json.NewEncoder(w).Encode(models)
+
+		case strings.HasSuffix(r.URL.Path, "/paths-info/main"):
+			body, _ := io.ReadAll(r.Body)
+			var req hfclient.PathsInfoRequest
+			json.Unmarshal(body, &req)
+			entries := make([]hfclient.PathsInfoEntry, 0, len(req.Paths))
+			for _, p := range req.Paths {
+				var size int64
+				switch {
+				case strings.Contains(p, "small"):
+					size = 100_000_000
+				case strings.Contains(p, "medium"):
+					size = 500_000_000
+				case strings.Contains(p, "large"):
+					size = 1_500_000_000
+				default:
+					size = 400_000_000
+				}
+				entries = append(entries, hfclient.PathsInfoEntry{
+					Path: p,
+					LFS:  &hfclient.LFS{Size: size, OID: "abc"},
+				})
+			}
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(entries)
+
+		default:
+			headerData := buildGGUF(map[string]any{
+				"general.architecture":          "llama",
+				"llama.block_count":             uint32(32),
+				"llama.attention.head_count_kv": uint32(8),
+				"llama.attention.head_count":    uint32(32),
+				"llama.attention.hidden_size":   uint32(4096),
+				"general.file_type":             uint32(10),
+			})
+			w.Header().Set("Content-Type", "application/octet-stream")
+			w.WriteHeader(http.StatusPartialContent)
+			w.Write(headerData)
+		}
+	}))
+	defer server.Close()
+
+	client := &hfclient.Client{
+		BaseURL:    server.URL,
+		HTTPClient: server.Client(),
+	}
+
+	svc := NewService(client, Config{
+		CtxSize:           4096,
+		VRAMMargin:        1024,
+		AvailableMemoryMB: 8000,
+	})
+
+	rec, err := svc.Recommend(newMockHW(8000))
+	require.NoError(t, err)
+	require.NotNil(t, rec)
+	assert.Equal(t, "repo/large", rec.Repo, "should select the largest model that fits")
+	assert.Equal(t, int64(1_500_000_000), rec.SizeBytes)
+	assert.True(t, rec.FitsInVRAM)
+}
+
+func TestRecommend_SkipsModelTooLargeForVRAM(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.URL.Path == "/api/models":
+			w.Header().Set("Content-Type", "application/json")
+			models := []hfclient.ModelInfo{
+				buildModel("repo/huge", "huge-q4_k_m.gguf", time.Now(),
+					[]string{"gguf", "base_model"}, 10_000_000_000),
+				buildModel("repo/medium", "medium-q4_k_m.gguf", time.Now(),
+					[]string{"gguf", "base_model"}, 500_000_000),
+			}
+			json.NewEncoder(w).Encode(models)
+
+		case strings.HasSuffix(r.URL.Path, "/paths-info/main"):
+			body, _ := io.ReadAll(r.Body)
+			var req hfclient.PathsInfoRequest
+			json.Unmarshal(body, &req)
+			entries := make([]hfclient.PathsInfoEntry, 0, len(req.Paths))
+			for _, p := range req.Paths {
+				var size int64
+				if strings.Contains(p, "huge") {
+					size = 10_000_000_000
+				} else {
+					size = 500_000_000
+				}
+				entries = append(entries, hfclient.PathsInfoEntry{
+					Path: p,
+					LFS:  &hfclient.LFS{Size: size, OID: "abc"},
+				})
+			}
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(entries)
+
+		default:
+			headerData := buildGGUF(map[string]any{
+				"general.architecture":          "llama",
+				"llama.block_count":             uint32(32),
+				"llama.attention.head_count_kv": uint32(8),
+				"llama.attention.head_count":    uint32(32),
+				"llama.attention.hidden_size":   uint32(4096),
+				"general.file_type":             uint32(10),
+			})
+			w.Header().Set("Content-Type", "application/octet-stream")
+			w.WriteHeader(http.StatusPartialContent)
+			w.Write(headerData)
+		}
+	}))
+	defer server.Close()
+
+	client := &hfclient.Client{
+		BaseURL:    server.URL,
+		HTTPClient: server.Client(),
+	}
+
+	svc := NewService(client, Config{
+		CtxSize:           4096,
+		VRAMMargin:        1024,
+		AvailableMemoryMB: 3000,
+	})
+
+	rec, err := svc.Recommend(newMockHW(3000))
+	require.NoError(t, err)
+	require.NotNil(t, rec)
+	assert.Equal(t, "repo/medium", rec.Repo, "should skip huge model and select medium that fits")
+	assert.Equal(t, int64(500_000_000), rec.SizeBytes)
+	assert.True(t, rec.FitsInVRAM)
 }
 
 func TestRecommend_AuthError(t *testing.T) {
@@ -193,26 +363,31 @@ func TestRecommend_NoModels(t *testing.T) {
 
 func TestRecommend_CPUWithRAM(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/api/models" {
+		switch {
+		case r.URL.Path == "/api/models":
 			w.Header().Set("Content-Type", "application/json")
 			models := []hfclient.ModelInfo{
 				buildModel("cpu/model-q4km", "model-q4_k_m.gguf", time.Now(),
 					[]string{"gguf", "base_model"}, 500_000_000),
 			}
 			json.NewEncoder(w).Encode(models)
-			return
+
+		case strings.HasSuffix(r.URL.Path, "/paths-info/main"):
+			handlePathsInfo(w, r)
+
+		default:
+			headerData := buildGGUF(map[string]any{
+				"general.architecture":          "llama",
+				"llama.block_count":             uint32(32),
+				"llama.attention.head_count_kv": uint32(8),
+				"llama.attention.head_count":    uint32(32),
+				"llama.attention.hidden_size":   uint32(4096),
+				"general.file_type":             uint32(10),
+			})
+			w.Header().Set("Content-Type", "application/octet-stream")
+			w.WriteHeader(http.StatusPartialContent)
+			w.Write(headerData)
 		}
-		headerData := buildGGUF(map[string]any{
-			"general.architecture":          "llama",
-			"llama.block_count":             uint32(32),
-			"llama.attention.head_count_kv": uint32(8),
-			"llama.attention.head_count":    uint32(32),
-			"llama.attention.hidden_size":   uint32(4096),
-			"general.file_type":             uint32(10),
-		})
-		w.Header().Set("Content-Type", "application/octet-stream")
-		w.WriteHeader(http.StatusPartialContent)
-		w.Write(headerData)
 	}))
 	defer server.Close()
 

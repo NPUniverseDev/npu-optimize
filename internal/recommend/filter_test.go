@@ -67,7 +67,7 @@ func TestFilterModels_MaxResults(t *testing.T) {
 func TestDefaultFilterParams(t *testing.T) {
 	p := DefaultFilterParams()
 	assert.Equal(t, 12, p.MinAgeMonths)
-	assert.Equal(t, 8, p.MaxResults)
+	assert.Equal(t, 30, p.MaxResults)
 }
 
 func TestHasTag(t *testing.T) {

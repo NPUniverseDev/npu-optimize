@@ -3,6 +3,7 @@ package hfclient
 import (
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -390,4 +391,85 @@ func TestRateLimitError_ImplementsError(t *testing.T) {
 func TestAuthError_Message(t *testing.T) {
 	err := &AuthError{msg: "custom auth error"}
 	assert.Equal(t, "custom auth error", err.Error())
+}
+
+func TestGetPathsInfo_Success(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "POST", r.Method)
+		assert.Contains(t, r.URL.Path, "/paths-info/main")
+
+		body, _ := io.ReadAll(r.Body)
+		var req PathsInfoRequest
+		json.Unmarshal(body, &req)
+		assert.ElementsMatch(t, []string{"model-q4_k_m.gguf", "model-f16.gguf"}, req.Paths)
+		assert.False(t, req.Expand)
+
+		w.Header().Set("Content-Type", "application/json")
+		entries := []PathsInfoEntry{
+			{Path: "model-q4_k_m.gguf", LFS: &LFS{Size: 500_000_000, OID: "abc"}},
+			{Path: "model-f16.gguf", LFS: &LFS{Size: 1_500_000_000, OID: "def"}},
+		}
+		json.NewEncoder(w).Encode(entries)
+	}))
+	defer server.Close()
+
+	client := &Client{
+		BaseURL:    server.URL,
+		HTTPClient: server.Client(),
+	}
+
+	entries, err := client.GetPathsInfo("test/repo", []string{"model-q4_k_m.gguf", "model-f16.gguf"})
+	require.NoError(t, err)
+	require.Len(t, entries, 2)
+	assert.Equal(t, "model-q4_k_m.gguf", entries[0].Path)
+	require.NotNil(t, entries[0].LFS)
+	assert.Equal(t, int64(500_000_000), entries[0].LFS.Size)
+	assert.Equal(t, int64(1_500_000_000), entries[1].LFS.Size)
+}
+
+func TestGetPathsInfo_EmptyResponse(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte("[]"))
+	}))
+	defer server.Close()
+
+	client := &Client{
+		BaseURL:    server.URL,
+		HTTPClient: server.Client(),
+	}
+
+	entries, err := client.GetPathsInfo("test/repo", []string{"nonexistent.gguf"})
+	require.NoError(t, err)
+	assert.Empty(t, entries)
+}
+
+func TestGetPathsInfo_CacheHit(t *testing.T) {
+	hitCount := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hitCount++
+		w.Header().Set("Content-Type", "application/json")
+		entries := []PathsInfoEntry{
+			{Path: "model.gguf", LFS: &LFS{Size: 1000, OID: "abc"}},
+		}
+		json.NewEncoder(w).Encode(entries)
+	}))
+	defer server.Close()
+
+	memCache := cache.New(t.TempDir())
+	client := &Client{
+		BaseURL:    server.URL,
+		HTTPClient: server.Client(),
+		Cache:      memCache,
+	}
+
+	entries1, err := client.GetPathsInfo("test/repo", []string{"model.gguf"})
+	require.NoError(t, err)
+	require.Len(t, entries1, 1)
+	assert.Equal(t, int64(1000), entries1[0].LFS.Size)
+
+	entries2, err := client.GetPathsInfo("test/repo", []string{"model.gguf"})
+	require.NoError(t, err)
+	require.Len(t, entries2, 1)
+	assert.Equal(t, 1, hitCount, "should not hit server again")
 }

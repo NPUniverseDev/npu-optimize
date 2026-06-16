@@ -3,7 +3,6 @@ package recommend
 import (
 	"fmt"
 	"log/slog"
-	"path/filepath"
 	"sort"
 	"strings"
 
@@ -11,6 +10,17 @@ import (
 	"github.com/Ericson246/npu-optimize/internal/hfclient"
 	"github.com/Ericson246/npu-optimize/internal/hwinfo"
 )
+
+func friendlySize(b int64) string {
+	switch {
+	case b >= 1<<40:
+		return fmt.Sprintf("%.1f TB", float64(b)/float64(1<<40))
+	case b >= 1<<30:
+		return fmt.Sprintf("%.1f GB", float64(b)/float64(1<<30))
+	default:
+		return fmt.Sprintf("%.0f MB", float64(b)/float64(1<<20))
+	}
+}
 
 type Config struct {
 	CtxSize           int
@@ -41,6 +51,23 @@ type Fallback struct {
 	Reason     string `json:"reason"`
 }
 
+type candidate struct {
+	model        hfclient.ModelInfo
+	bestFile     string
+	bestSize     int64
+	siblingSizes map[string]int64
+}
+
+func (c candidate) sizeOf(file string) int64 {
+	if c.siblingSizes != nil {
+		key := c.model.ModelID + "|" + file
+		if s, ok := c.siblingSizes[key]; ok {
+			return s
+		}
+	}
+	return 0
+}
+
 type Service struct {
 	hfClient *hfclient.Client
 	filter   FilterParams
@@ -66,17 +93,25 @@ func (s *Service) Recommend(hw *hwinfo.Info) (*Recommendation, error) {
 		return &Recommendation{Hardware: hw}, nil
 	}
 
-	memoryMB := s.config.AvailableMemoryMB
-	if memoryMB <= 0 {
-		if hw.GPU != nil {
-			memoryMB = hw.GPU.VRAMFreeMB
-		} else {
-			memoryMB = 4000
-		}
+	memoryMB := s.resolveMemoryMB(hw)
+
+	enriched := s.enrichCandidates(candidates)
+	if len(enriched) == 0 {
+		return &Recommendation{Hardware: hw}, nil
 	}
 
-	for _, candidate := range candidates {
-		rec := s.tryRecommend(hw, candidate, memoryMB)
+	sort.Slice(enriched, func(i, j int) bool {
+		return enriched[i].bestSize > enriched[j].bestSize
+	})
+
+	slog.Debug("evaluating candidates by size (best-fit)",
+		"count", len(enriched),
+		"largest", friendlySize(enriched[0].bestSize),
+		"smallest", friendlySize(enriched[len(enriched)-1].bestSize),
+	)
+
+	for _, c := range enriched {
+		rec := s.tryRecommend(hw, c, memoryMB)
 		if rec != nil {
 			return rec, nil
 		}
@@ -85,24 +120,69 @@ func (s *Service) Recommend(hw *hwinfo.Info) (*Recommendation, error) {
 	return &Recommendation{Hardware: hw}, nil
 }
 
-func (s *Service) tryRecommend(hw *hwinfo.Info, model hfclient.ModelInfo, memoryMB int64) *Recommendation {
-	bestFile, bestSize := s.pickBestFile(model.Siblings)
-	if bestFile == "" {
-		return nil
+func (s *Service) resolveMemoryMB(hw *hwinfo.Info) int64 {
+	if s.config.AvailableMemoryMB > 0 {
+		return s.config.AvailableMemoryMB
 	}
+	if hw.GPU != nil {
+		return hw.GPU.VRAMFreeMB
+	}
+	return 4000
+}
 
-	if bestSize <= 0 {
-		size, err := s.fetchFileSize(model.ID, bestFile)
-		if err != nil {
-			slog.Warn("cannot resolve file size, skipping", "repo", model.ID, "file", bestFile, "err", err)
-			return nil
+func (s *Service) enrichCandidates(models []hfclient.ModelInfo) []candidate {
+	repoFiles := make(map[string][]string)
+	for _, m := range models {
+		for _, sib := range m.Siblings {
+			if strings.HasSuffix(sib.RFilename, ".gguf") {
+				repoFiles[m.ModelID] = append(repoFiles[m.ModelID], sib.RFilename)
+			}
 		}
-		bestSize = size
 	}
 
-	headerData, err := s.hfClient.GetGGUFHeader(model.ID, bestFile)
+	sizes := make(map[string]int64)
+	for repo, paths := range repoFiles {
+		entries, err := s.hfClient.GetPathsInfo(repo, paths)
+		if err != nil {
+			slog.Warn("cannot resolve sizes, skipping repo", "repo", repo, "err", err)
+			continue
+		}
+		for _, e := range entries {
+			var size int64
+			if e.LFS != nil {
+				size = e.LFS.Size
+			} else if e.Size != nil {
+				size = *e.Size
+			}
+			if size > 0 {
+				sizes[repo+"|"+e.Path] = size
+			}
+		}
+	}
+
+	var enriched []candidate
+	for _, m := range models {
+		bestFile, bestSize := s.pickBestFile(m.Siblings, func(file string) int64 {
+			return sizes[m.ModelID+"|"+file]
+		})
+		if bestFile != "" && bestSize > 0 {
+			enriched = append(enriched, candidate{
+				model:        m,
+				bestFile:     bestFile,
+				bestSize:     bestSize,
+				siblingSizes: sizes,
+			})
+		}
+	}
+
+	return enriched
+}
+
+func (s *Service) tryRecommend(hw *hwinfo.Info, c candidate, memoryMB int64) *Recommendation {
+	headerData, err := s.hfClient.GetGGUFHeader(c.model.ID, c.bestFile)
 	if err != nil {
-		slog.Warn("cannot fetch GGUF header, skipping", "repo", model.ID, "file", bestFile, "err", err)
+		slog.Warn("cannot fetch GGUF header, skipping",
+			"repo", c.model.ID, "file", c.bestFile, "err", err)
 		return nil
 	}
 
@@ -120,26 +200,32 @@ func (s *Service) tryRecommend(hw *hwinfo.Info, model hfclient.ModelInfo, memory
 		VRAMFreeMB: memoryMB,
 		CtxSize:    s.config.CtxSize,
 		VRAMMargin: s.config.VRAMMargin,
-		FileSize:   bestSize,
+		FileSize:   c.bestSize,
 		Header:     header,
 	}
 	vramResult := calculator.CalculateVRAM(vramParams)
 
+	if !vramResult.FitsInVRAM {
+		slog.Debug("model too large for VRAM",
+			"repo", c.model.ID, "size", friendlySize(c.bestSize))
+		return nil
+	}
+
 	multimodal := false
-	for _, t := range model.Tags {
+	for _, t := range c.model.Tags {
 		if t == "image-text-to-text" {
 			multimodal = true
 			break
 		}
 	}
 
-	fallbacks := s.buildFallbacks(model.Siblings, bestFile, memoryMB, header)
+	fallbacks := s.buildFallbacks(c, memoryMB, header)
 
 	return &Recommendation{
 		Hardware:         hw,
-		Repo:             model.ID,
-		File:             bestFile,
-		SizeBytes:        bestSize,
+		Repo:             c.model.ID,
+		File:             c.bestFile,
+		SizeBytes:        c.bestSize,
 		Architecture:     header.Architecture,
 		ArchitectureType: archType,
 		Multimodal:       multimodal,
@@ -150,39 +236,54 @@ func (s *Service) tryRecommend(hw *hwinfo.Info, model hfclient.ModelInfo, memory
 	}
 }
 
-func (s *Service) pickBestFile(siblings []hfclient.Sibling) (string, int64) {
+func (s *Service) pickBestFile(siblings []hfclient.Sibling, sizeFn func(string) int64) (string, int64) {
+	var bestFile string
+	var bestSize int64
+
 	for _, sib := range siblings {
-		if hasGGUFFile([]hfclient.Sibling{sib}, "Q4_K_M") {
-			size := int64(0)
-			if sib.Size != nil {
-				size = *sib.Size
+		if isQ4KMFile(sib.RFilename) {
+			size := sizeFn(sib.RFilename)
+			if size > bestSize {
+				bestFile = sib.RFilename
+				bestSize = size
 			}
-			return sib.RFilename, size
 		}
 	}
+	if bestFile != "" {
+		return bestFile, bestSize
+	}
+
 	for _, sib := range siblings {
 		if strings.HasSuffix(sib.RFilename, ".gguf") {
-			size := int64(0)
-			if sib.Size != nil {
-				size = *sib.Size
+			size := sizeFn(sib.RFilename)
+			if size > bestSize {
+				bestFile = sib.RFilename
+				bestSize = size
 			}
-			return sib.RFilename, size
 		}
 	}
-	return "", 0
+
+	return bestFile, bestSize
 }
 
-func (s *Service) buildFallbacks(siblings []hfclient.Sibling, bestFile string, vramFreeMB int64, header *GGUFHeader) []Fallback {
+func isQ4KMFile(filename string) bool {
+	return strings.Contains(strings.ToLower(filename), "q4_k_m") &&
+		strings.HasSuffix(filename, ".gguf")
+}
+
+func (s *Service) buildFallbacks(c candidate, vramFreeMB int64, header *GGUFHeader) []Fallback {
 	var fbs []Fallback
 
-	for _, sib := range siblings {
+	for _, sib := range c.model.Siblings {
 		if !strings.HasSuffix(sib.RFilename, ".gguf") {
 			continue
 		}
-		if sib.RFilename == bestFile {
+		if sib.RFilename == c.bestFile {
 			continue
 		}
-		if sib.Size == nil || *sib.Size <= 0 {
+
+		size := c.sizeOf(sib.RFilename)
+		if size <= 0 {
 			continue
 		}
 
@@ -195,7 +296,7 @@ func (s *Service) buildFallbacks(siblings []hfclient.Sibling, bestFile string, v
 			VRAMFreeMB: vramFreeMB,
 			CtxSize:    s.config.CtxSize,
 			VRAMMargin: s.config.VRAMMargin,
-			FileSize:   *sib.Size,
+			FileSize:   size,
 			Header:     header,
 		}
 
@@ -207,7 +308,7 @@ func (s *Service) buildFallbacks(siblings []hfclient.Sibling, bestFile string, v
 
 		fbs = append(fbs, Fallback{
 			File:       sib.RFilename,
-			SizeBytes:  *sib.Size,
+			SizeBytes:  size,
 			FitsInVRAM: true,
 			Reason:     "Alternativa con cuantización " + quant,
 		})
@@ -225,12 +326,12 @@ func (s *Service) buildFallbacks(siblings []hfclient.Sibling, bestFile string, v
 }
 
 func (s *Service) searchModels() ([]hfclient.ModelInfo, error) {
-	textModels, err := s.hfClient.SearchModels([]string{"gguf", "text-generation"}, 30)
+	textModels, err := s.hfClient.SearchModels([]string{"gguf", "text-generation"}, 100)
 	if err != nil {
 		return nil, err
 	}
 
-	visionModels, err := s.hfClient.SearchModels([]string{"gguf", "image-text-to-text"}, 30)
+	visionModels, err := s.hfClient.SearchModels([]string{"gguf", "image-text-to-text"}, 100)
 	if err != nil {
 		return textModels, nil
 	}
@@ -265,19 +366,4 @@ func extractQuant(filename string) string {
 	return ""
 }
 
-func (s *Service) fetchFileSize(repo, file string) (int64, error) {
-	entries, err := s.hfClient.GetTree(repo)
-	if err != nil {
-		return 0, err
-	}
-	base := filepath.Base(file)
-	for _, e := range entries {
-		if e.LFS == nil {
-			continue
-		}
-		if strings.EqualFold(e.Name, file) || strings.EqualFold(e.Name, base) {
-			return e.LFS.Size, nil
-		}
-	}
-	return 0, fmt.Errorf("file %s not found in tree of %s", file, repo)
-}
+

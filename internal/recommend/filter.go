@@ -15,7 +15,7 @@ type FilterParams struct {
 func DefaultFilterParams() FilterParams {
 	return FilterParams{
 		MinAgeMonths: 12,
-		MaxResults:   8,
+		MaxResults:   30,
 	}
 }
 

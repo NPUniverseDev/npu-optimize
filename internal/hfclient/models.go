@@ -35,6 +35,17 @@ type LFS struct {
 type SearchResponse []ModelInfo
 type TreeResponse []TreeEntry
 
+type PathsInfoEntry struct {
+	Path string `json:"path"`
+	Size *int64 `json:"size,omitempty"`
+	LFS  *LFS   `json:"lfs,omitempty"`
+}
+
+type PathsInfoRequest struct {
+	Paths  []string `json:"paths"`
+	Expand bool     `json:"expand"`
+}
+
 const maxRetries = 3
 
 type RateLimitInfo struct {

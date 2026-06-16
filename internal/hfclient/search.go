@@ -1,10 +1,12 @@
 package hfclient
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/url"
+	"strings"
 )
 
 func (c *Client) SearchModels(filters []string, limit int) ([]ModelInfo, error) {
@@ -65,6 +67,45 @@ func (c *Client) GetTree(repo string) ([]TreeEntry, error) {
 	var entries TreeResponse
 	if err := json.Unmarshal(data, &entries); err != nil {
 		return nil, fmt.Errorf("parsing tree response: %w", err)
+	}
+
+	return entries, nil
+}
+
+func (c *Client) GetPathsInfo(repo string, paths []string) ([]PathsInfoEntry, error) {
+	rawURL := fmt.Sprintf("%s/api/models/%s/paths-info/main", c.BaseURL, repo)
+
+	cacheKey := c.cacheKey("paths-info", rawURL+"|"+strings.Join(paths, ","))
+	if cached, ok := c.getFromCache(cacheKey); ok {
+		var entries []PathsInfoEntry
+		if err := json.Unmarshal(cached, &entries); err == nil {
+			return entries, nil
+		}
+	}
+
+	body, err := json.Marshal(PathsInfoRequest{Paths: paths})
+	if err != nil {
+		return nil, fmt.Errorf("marshalling paths-info request: %w", err)
+	}
+
+	data, err := c.doWithRetry(func() (*http.Response, error) {
+		req, err := http.NewRequest("POST", rawURL, bytes.NewReader(body))
+		if err != nil {
+			return nil, err
+		}
+		c.setHeaders(req)
+		req.Header.Set("Content-Type", "application/json")
+		return c.HTTPClient.Do(req)
+	})
+	if err != nil {
+		return nil, fmt.Errorf("get paths-info: %w", err)
+	}
+
+	c.storeInCache(cacheKey, data, treeCacheTTL)
+
+	var entries []PathsInfoEntry
+	if err := json.Unmarshal(data, &entries); err != nil {
+		return nil, fmt.Errorf("parsing paths-info response: %w", err)
 	}
 
 	return entries, nil
