@@ -20,6 +20,7 @@ linters-settings:
       - os.Setenv
       - os.Unsetenv
       - (net/http.ResponseWriter).Write
+      - (*encoding/json.Encoder).Encode
 
 issues:
   exclude-use-default: false
