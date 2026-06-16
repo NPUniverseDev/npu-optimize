@@ -400,7 +400,7 @@ func TestGetPathsInfo_Success(t *testing.T) {
 
 		body, _ := io.ReadAll(r.Body)
 		var req PathsInfoRequest
-		json.Unmarshal(body, &req)
+		_ = json.Unmarshal(body, &req)
 		assert.ElementsMatch(t, []string{"model-q4_k_m.gguf", "model-f16.gguf"}, req.Paths)
 		assert.False(t, req.Expand)
 

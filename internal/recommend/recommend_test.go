@@ -182,7 +182,7 @@ func TestRecommend_BestFitSelectsLargest(t *testing.T) {
 		case strings.HasSuffix(r.URL.Path, "/paths-info/main"):
 			body, _ := io.ReadAll(r.Body)
 			var req hfclient.PathsInfoRequest
-			json.Unmarshal(body, &req)
+			_ = json.Unmarshal(body, &req)
 			entries := make([]hfclient.PathsInfoEntry, 0, len(req.Paths))
 			for _, p := range req.Paths {
 				var size int64
@@ -255,7 +255,7 @@ func TestRecommend_SkipsModelTooLargeForVRAM(t *testing.T) {
 		case strings.HasSuffix(r.URL.Path, "/paths-info/main"):
 			body, _ := io.ReadAll(r.Body)
 			var req hfclient.PathsInfoRequest
-			json.Unmarshal(body, &req)
+			_ = json.Unmarshal(body, &req)
 			entries := make([]hfclient.PathsInfoEntry, 0, len(req.Paths))
 			for _, p := range req.Paths {
 				var size int64

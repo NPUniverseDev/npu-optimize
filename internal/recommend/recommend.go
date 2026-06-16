@@ -365,5 +365,3 @@ func extractQuant(filename string) string {
 	}
 	return ""
 }
-
-
