@@ -13,13 +13,15 @@ import (
 	"github.com/Ericson246/npu-optimize/internal/hwinfo"
 	"github.com/Ericson246/npu-optimize/internal/output"
 	"github.com/Ericson246/npu-optimize/internal/recommend"
+	"github.com/Ericson246/npu-optimize/internal/runtime"
 	"github.com/spf13/cobra"
 )
 
 var (
-	ctxSize    int
-	mode       string
-	vramMargin int
+	ctxSize       int
+	mode          string
+	vramMargin    int
+	preferBackend string
 )
 
 var detectCmd = &cobra.Command{
@@ -40,6 +42,7 @@ func init() {
 	df.IntVarP(&ctxSize, "ctx-size", "c", constants.DefaultCtxSize, "Minimum required context size")
 	df.StringVarP(&mode, "mode", "m", "auto", "Detection mode: auto, gpu-only, cpu, partial")
 	df.IntVar(&vramMargin, "vram-margin", constants.DefaultVRAMMargin, "VRAM safety margin in MB")
+	df.StringVar(&preferBackend, "prefer-backend", "", "Preferred inference backend: cuda, rocm, openvino, vulkan, cpu")
 }
 
 type detectConfig struct {
@@ -193,10 +196,10 @@ func runDetect() error {
 	if osc < 1 {
 		osc = 1
 	}
-	if osc > 1 {
+	if osc > 2 {
 		slog.Warn("requested schema version not available, using highest available",
-			"requested", osc, "used", 1)
-		osc = 1
+			"requested", osc, "used", 2)
+		osc = 2
 	}
 
 	result := output.New(osc)
@@ -216,6 +219,7 @@ func runDetect() error {
 			Name:    hw.CPU.Name,
 			Cores:   hw.CPU.Cores,
 			Threads: hw.CPU.Threads,
+			ISA:     hw.CPU.ISA,
 		},
 		RAMTotalMB: hw.RAMTotalMB,
 		RAMFreeMB:  hw.RAMFreeMB,
@@ -228,6 +232,34 @@ func runDetect() error {
 			VRAMTotalMB: hw.GPU.VRAMTotalMB,
 			VRAMFreeMB:  hw.GPU.VRAMFreeMB,
 			Integrated:  hw.GPU.Integrated,
+			Backends:    hw.GPU.Backends,
+		}
+	}
+
+	catalog, catErr := runtime.FetchCatalog("")
+	if catErr != nil {
+		slog.Warn("failed to fetch runtime catalog", "err", catErr)
+	} else {
+		entry, selErr := runtime.Select(hw, preferBackend, catalog)
+		if selErr != nil {
+			slog.Warn("runtime selection failed", "err", selErr)
+		} else if entry != nil {
+			ver := entry.Version
+			slog.Info("runtime selected",
+				"backend", entry.Backend,
+				"source", entry.SourceName,
+				"version", ver,
+			)
+			result.Version = 2
+			result.RuntimeRecommend = &output.RuntimeRecommend{
+				Backend:     entry.Backend,
+				Version:     ver,
+				Source:      entry.SourceName,
+				DownloadURL: entry.DownloadURL,
+				SHA256:      entry.SHA256,
+				SizeBytes:   entry.SizeBytes,
+				Format:      entry.Format,
+			}
 		}
 	}
 
@@ -262,9 +294,11 @@ func runDetect() error {
 	}
 
 	if rec.Header != nil {
+		modelURL := fmt.Sprintf("https://huggingface.co/%s/resolve/main/%s", rec.Repo, rec.File)
 		result.Recommended = &output.Recommended{
 			Repo:             rec.Repo,
 			File:             rec.File,
+			DownloadURL:      modelURL,
 			SHA256:           rec.SHA256,
 			SizeBytes:        rec.SizeBytes,
 			Architecture:     rec.Architecture,
