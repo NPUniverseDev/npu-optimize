@@ -52,12 +52,6 @@ type RuntimeRecommend struct {
 	Format      string `json:"format"`
 }
 
-type CPUInfo struct {
-	Name    string `json:"name"`
-	Cores   int    `json:"cores"`
-	Threads int    `json:"threads"`
-}
-
 type Recommended struct {
 	Repo             string   `json:"repo"`
 	File             string   `json:"file"`
