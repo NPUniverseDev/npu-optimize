@@ -16,7 +16,7 @@ npu-optimize recommends llama.cpp runtimes to external apps (npu-agent, etc.) ba
 
 ### Runtime Catalog
 
-A JSON catalog hosted at `https://Ericson246.github.io/llama.cpp/runtime-catalog.json` maps backends to downloadable assets:
+A JSON catalog hosted at `https://Ericson246.github.io/npu-optimize/runtime-catalog.json` maps backends to downloadable assets:
 
 ```json
 {
