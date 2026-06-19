@@ -6,9 +6,9 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![GitHub Release](https://img.shields.io/github/v/release/Ericson246/npu-optimize?logo=github)](https://github.com/Ericson246/npu-optimize/releases)
 
-**npu-optimize** detects your hardware, searches HuggingFace for compatible GGUF models, and calculates the optimal inference configuration for [llama.cpp](https://github.com/ggml-org/llama.cpp).
+**npu-optimize** detects your hardware, recommends a compatible llama.cpp runtime (CUDA, Vulkan, ROCm, Metal, OpenVINO, CPU), searches HuggingFace for GGUF models, and calculates the optimal inference configuration for [llama.cpp](https://github.com/ggml-org/llama.cpp).
 
-No models are downloaded in v0.1.0 — it's a dry-run that tells you what would work best on your machine.
+No models are downloaded — it's a dry-run that tells you what would work best on your machine.
 
 ---
 
@@ -43,7 +43,7 @@ Pre-built binaries:
 
 ## Usage
 
-### `detect` — Hardware detection + model recommendation (v0.1.0)
+### `detect` — Hardware detection + runtime + model recommendation (v0.2.0)
 
 ```bash
 npu-optimize detect [flags]
@@ -59,6 +59,7 @@ npu-optimize detect [flags]
 | `--output` / `-o` | `json` | Output format (`json` or `text`) |
 | `--output-schema-version` | `1` | Requested output schema version |
 | `--verbose` / `-v` | `0` | Verbosity level (`-v`, `-vv`, `-vvv`) |
+| `--prefer-backend` | `""` | Prefer a specific GPU backend: `cuda`, `rocm`, `vulkan`, `openvino`, `cpu` |
 | `--config` | `""` | Path to config file |
 | `--log-format` | `text` | Log format (`text` or `json`) |
 
@@ -147,12 +148,28 @@ npu-optimize detect [flags]
 
 ---
 
+## Supported backends
+
+| Backend | Windows | Linux | macOS | Android |
+|---------|:-------:|:-----:|:-----:|:-------:|
+| CUDA    | ✅      | ✅    | ❌     | ❌      |
+| ROCm    | ✅      | ✅    | ❌     | ❌      |
+| Vulkan  | ✅      | ✅    | ✅     | ✅      |
+| OpenVINO| ✅      | ✅    | ❌     | ❌      |
+| Metal   | ❌      | ❌    | ✅     | ❌      |
+| CPU     | ✅      | ✅    | ✅     | ✅      |
+
+The [runtime catalog](docs/runtime-catalog.json) is synchronized daily at 04:00 UTC from [ggml-org/llama.cpp](https://github.com/ggml-org/llama.cpp) and [Ericson246/llama.cpp](https://github.com/Ericson246/llama.cpp) (custom builds like Android Vulkan). See [sync-runtimes workflow](.github/workflows/sync-runtimes.yml).
+
 ## Requirements
 
-- **Operating system:** Windows or Linux (macOS coming in a future release)
+- **Operating system:** Windows, Linux, macOS, or Android (via Termux)
 - **GPU (optional):**
-  - NVIDIA: `nvidia-smi` must be in PATH
-  - Intel / AMD: `vulkaninfo` must be in PATH
+  - NVIDIA CUDA: `cudart64_*.dll` / `libcudart.so`
+  - AMD ROCm: `amdhip64_*.dll` / `librocm.so` + AMD GPU
+  - Intel/AMD Vulkan: `vulkan-1.dll` / `libvulkan.so` / `vulkaninfo`
+  - Intel OpenVINO: `openvino.dll` / `libopenvino.so`
+  - Apple Metal: always available on macOS (arm64)
 - **CPU-only mode:** Works on any system with at least 4 GB of free RAM
 
 ---
@@ -160,7 +177,9 @@ npu-optimize detect [flags]
 ## How it works
 
 ```
-Hardware detection (nvidia-smi / vulkaninfo)
+Hardware detection (GPU backends, CPU ISA, RAM)
+    ↓
+Runtime selection (CUDA → ROCm → OpenVINO → Vulkan → CPU priority)
     ↓
 HuggingFace API search (top GGUF models)
     ↓
@@ -176,6 +195,7 @@ For full architecture details, see:
 - [ADR-002: Benchmark and Extrapolation](docs/ADR-002-benchmark-and-extrapolation.md)
 - [ADR-003: Output Schema and Contract](docs/ADR-003-schema-and-contract.md)
 - [ADR-004: Testing and Quality](docs/ADR-004-testing-and-quality.md)
+- [ADR-006: Runtime Management](docs/ADR-006-runtime-management.md)
 
 ---
 
