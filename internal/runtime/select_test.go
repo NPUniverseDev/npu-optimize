@@ -1,6 +1,7 @@
 package runtime
 
 import (
+	"runtime"
 	"testing"
 
 	"github.com/Ericson246/npu-optimize/internal/hwinfo"
@@ -16,55 +17,77 @@ func testCatalog() *Catalog {
 				Repo: "ggml-org/llama.cpp",
 				Runtimes: map[string]RuntimeEntry{
 					"windows-cuda-12.4-x64": {
-						ID:       "windows-cuda-12.4-x64",
-						Platform: "windows",
-						Arch:     "x64",
-						Backend:  "cuda",
-						Version:  "b9704",
+						ID:          "windows-cuda-12.4-x64",
+						Platform:    "windows",
+						Arch:        "x64",
+						Backend:     "cuda",
+						Version:     "b9704",
 						DownloadURL: "https://example.com/cuda.zip",
 						SizeBytes:   1000,
 						Format:      "zip",
 						SourceName:  "ggml-org/llama.cpp",
 					},
 					"windows-vulkan-x64": {
-						ID:       "windows-vulkan-x64",
-						Platform: "windows",
-						Arch:     "x64",
-						Backend:  "vulkan",
-						Version:  "b9704",
+						ID:          "windows-vulkan-x64",
+						Platform:    "windows",
+						Arch:        "x64",
+						Backend:     "vulkan",
+						Version:     "b9704",
 						DownloadURL: "https://example.com/vulkan.zip",
 						SizeBytes:   500,
 						Format:      "zip",
 						SourceName:  "ggml-org/llama.cpp",
 					},
 					"windows-cpu-x64": {
-						ID:       "windows-cpu-x64",
-						Platform: "windows",
-						Arch:     "x64",
-						Backend:  "cpu",
-						Version:  "b9704",
+						ID:          "windows-cpu-x64",
+						Platform:    "windows",
+						Arch:        "x64",
+						Backend:     "cpu",
+						Version:     "b9704",
 						DownloadURL: "https://example.com/cpu.zip",
 						SizeBytes:   200,
 						Format:      "zip",
 						SourceName:  "ggml-org/llama.cpp",
 					},
 					"linux-vulkan-x64": {
-						ID:       "linux-vulkan-x64",
-						Platform: "linux",
-						Arch:     "x64",
-						Backend:  "vulkan",
-						Version:  "b9704",
+						ID:          "linux-vulkan-x64",
+						Platform:    "linux",
+						Arch:        "x64",
+						Backend:     "vulkan",
+						Version:     "b9704",
 						DownloadURL: "https://example.com/linux-vulkan.tar.gz",
 						SizeBytes:   600,
 						Format:      "tar.gz",
 						SourceName:  "ggml-org/llama.cpp",
 					},
+					"linux-cuda-x64": {
+						ID:          "linux-cuda-x64",
+						Platform:    "linux",
+						Arch:        "x64",
+						Backend:     "cuda",
+						Version:     "b9704",
+						DownloadURL: "https://example.com/linux-cuda.tar.gz",
+						SizeBytes:   1100,
+						Format:      "tar.gz",
+						SourceName:  "ggml-org/llama.cpp",
+					},
+					"linux-cpu-x64": {
+						ID:          "linux-cpu-x64",
+						Platform:    "linux",
+						Arch:        "x64",
+						Backend:     "cpu",
+						Version:     "b9704",
+						DownloadURL: "https://example.com/linux-cpu.tar.gz",
+						SizeBytes:   250,
+						Format:      "tar.gz",
+						SourceName:  "ggml-org/llama.cpp",
+					},
 					"darwin-metal-arm64": {
-						ID:       "darwin-metal-arm64",
-						Platform: "darwin",
-						Arch:     "arm64",
-						Backend:  "metal",
-						Version:  "b9704",
+						ID:          "darwin-metal-arm64",
+						Platform:    "darwin",
+						Arch:        "arm64",
+						Backend:     "metal",
+						Version:     "b9704",
 						DownloadURL: "https://example.com/macos.tar.gz",
 						SizeBytes:   300,
 						Format:      "tar.gz",
@@ -134,7 +157,7 @@ func TestSelect_CUDAPriority(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotNil(t, entry)
 	assert.Equal(t, "cuda", entry.Backend)
-	assert.Equal(t, "windows-cuda-12.4-x64", entry.ID)
+	assert.Equal(t, runtime.GOOS, entry.Platform)
 }
 
 func TestSelect_PreferVulkan(t *testing.T) {

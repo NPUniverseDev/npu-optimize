@@ -3,20 +3,20 @@ package output
 import "time"
 
 type Output struct {
-	Schema              string                `json:"$schema"`
-	Version             int                   `json:"version"`
-	GeneratedAt         time.Time             `json:"generated_at"`
-	ToolVersion         string                `json:"tool_version"`
-	Backend             string                `json:"backend"`
-	ModeUsed            string                `json:"mode_used"`
-	Viable              bool                  `json:"viable"`
-	HardwareFingerprint string                `json:"hardware_fingerprint"`
-	Hardware            *HardwareInfo         `json:"hardware"`
-	Recommended         *Recommended          `json:"recommended,omitempty"`
-	RuntimeRecommend    *RuntimeRecommend     `json:"runtime_recommendation,omitempty"`
-	InferenceParams     *InferenceParams      `json:"inference_params,omitempty"`
-	BackendParams       *BackendParams        `json:"backend_params,omitempty"`
-	Fallbacks           []FallbackEntry       `json:"fallbacks,omitempty"`
+	Schema              string            `json:"$schema"`
+	Version             int               `json:"version"`
+	GeneratedAt         time.Time         `json:"generated_at"`
+	ToolVersion         string            `json:"tool_version"`
+	Backend             string            `json:"backend"`
+	ModeUsed            string            `json:"mode_used"`
+	Viable              bool              `json:"viable"`
+	HardwareFingerprint string            `json:"hardware_fingerprint"`
+	Hardware            *HardwareInfo     `json:"hardware"`
+	Recommended         *Recommended      `json:"recommended,omitempty"`
+	RuntimeRecommend    *RuntimeRecommend `json:"runtime_recommendation,omitempty"`
+	InferenceParams     *InferenceParams  `json:"inference_params,omitempty"`
+	BackendParams       *BackendParams    `json:"backend_params,omitempty"`
+	Fallbacks           []FallbackEntry   `json:"fallbacks,omitempty"`
 }
 
 type HardwareInfo struct {
