@@ -47,6 +47,7 @@ type Recommendation struct {
 type Fallback struct {
 	File       string `json:"file"`
 	SizeBytes  int64  `json:"size_bytes"`
+	SHA256     string `json:"sha256,omitempty"`
 	FitsInVRAM bool   `json:"fits_in_vram"`
 	Reason     string `json:"reason"`
 }
@@ -56,6 +57,7 @@ type candidate struct {
 	bestFile     string
 	bestSize     int64
 	siblingSizes map[string]int64
+	siblingSHAs  map[string]string
 }
 
 func (c candidate) sizeOf(file string) int64 {
@@ -141,6 +143,7 @@ func (s *Service) enrichCandidates(models []hfclient.ModelInfo) []candidate {
 	}
 
 	sizes := make(map[string]int64)
+	shas := make(map[string]string)
 	for repo, paths := range repoFiles {
 		entries, err := s.hfClient.GetPathsInfo(repo, paths)
 		if err != nil {
@@ -151,6 +154,9 @@ func (s *Service) enrichCandidates(models []hfclient.ModelInfo) []candidate {
 			var size int64
 			if e.LFS != nil {
 				size = e.LFS.Size
+				if e.LFS.OID != "" {
+					shas[repo+"|"+e.Path] = e.LFS.OID
+				}
 			} else if e.Size != nil {
 				size = *e.Size
 			}
@@ -171,6 +177,7 @@ func (s *Service) enrichCandidates(models []hfclient.ModelInfo) []candidate {
 				bestFile:     bestFile,
 				bestSize:     bestSize,
 				siblingSizes: sizes,
+				siblingSHAs:  shas,
 			})
 		}
 	}
@@ -219,12 +226,14 @@ func (s *Service) tryRecommend(hw *hwinfo.Info, c candidate, memoryMB int64) *Re
 		}
 	}
 
+	sha := c.siblingSHAs[c.model.ModelID+"|"+c.bestFile]
 	fallbacks := s.buildFallbacks(c, memoryMB, header)
 
 	return &Recommendation{
 		Hardware:         hw,
 		Repo:             c.model.ID,
 		File:             c.bestFile,
+		SHA256:           sha,
 		SizeBytes:        c.bestSize,
 		Architecture:     header.Architecture,
 		ArchitectureType: archType,
@@ -306,9 +315,12 @@ func (s *Service) buildFallbacks(c candidate, vramFreeMB int64, header *GGUFHead
 			continue
 		}
 
+		sha := c.siblingSHAs[c.model.ModelID+"|"+sib.RFilename]
+
 		fbs = append(fbs, Fallback{
 			File:       sib.RFilename,
 			SizeBytes:  size,
+			SHA256:     sha,
 			FitsInVRAM: true,
 			Reason:     "Alternativa con cuantización " + quant,
 		})

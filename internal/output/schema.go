@@ -100,6 +100,7 @@ type LlamaCppParams struct {
 type FallbackEntry struct {
 	File       string `json:"file"`
 	SizeBytes  int64  `json:"size_bytes"`
+	SHA256     string `json:"sha256,omitempty"`
 	FitsInVRAM bool   `json:"fits_in_vram"`
 	Reason     string `json:"reason"`
 }

@@ -350,6 +350,7 @@ func runDetect() error {
 		result.Fallbacks = append(result.Fallbacks, output.FallbackEntry{
 			File:       fb.File,
 			SizeBytes:  fb.SizeBytes,
+			SHA256:     fb.SHA256,
 			FitsInVRAM: fb.FitsInVRAM,
 			Reason:     fb.Reason,
 		})
