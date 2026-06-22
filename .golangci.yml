@@ -1,26 +1,27 @@
+version: "2"
 run:
   timeout: 3m
 
 linters:
   enable:
-    - gofmt
     - govet
     - errcheck
     - staticcheck
     - unused
-    - gosimple
     - ineffassign
-    - typecheck
+  settings:
+    errcheck:
+      exclude-functions:
+        - (io.Closer).Close
+        - os.Remove
+        - os.Setenv
+        - os.Unsetenv
+        - (net/http.ResponseWriter).Write
+        - (*encoding/json.Encoder).Encode
 
-linters-settings:
-  errcheck:
-    exclude-functions:
-      - (io.Closer).Close
-      - os.Remove
-      - os.Setenv
-      - os.Unsetenv
-      - (net/http.ResponseWriter).Write
-      - (*encoding/json.Encoder).Encode
+formatters:
+  enable:
+    - gofmt
 
 issues:
   exclude-use-default: false
