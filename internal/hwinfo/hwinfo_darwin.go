@@ -3,7 +3,6 @@ package hwinfo
 import (
 	"log/slog"
 	"os/exec"
-	"strings"
 
 	"github.com/shirou/gopsutil/v3/cpu"
 	"github.com/shirou/gopsutil/v3/mem"
