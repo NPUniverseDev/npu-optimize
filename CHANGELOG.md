@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.1](https://github.com/Ericson246/npu-optimize/compare/v0.2.0...v0.2.1) (2026-06-22)
+
+
+### Bug Fixes
+
+* remove unused strings import in hwinfo_darwin.go ([68c011f](https://github.com/Ericson246/npu-optimize/commit/68c011fcab2f631434d3f451bc16c38b0bd96896))
+
 ## [0.2.0](https://github.com/Ericson246/npu-optimize/compare/v0.1.1...v0.2.0) (2026-06-22)
 
 
