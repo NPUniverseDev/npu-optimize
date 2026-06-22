@@ -65,7 +65,7 @@ func hasCUDARuntime() bool {
 	for _, name := range []string{"cudart64_12.dll", "cudart64_13.dll", "cudart64_11.dll"} {
 		lib, err := syscall.LoadLibrary(name)
 		if err == nil {
-			syscall.FreeLibrary(lib)
+			_ = syscall.FreeLibrary(lib)
 			return true
 		}
 	}
@@ -76,7 +76,7 @@ func hasROCmRuntime() bool {
 	for _, name := range []string{"amdhip64_7.dll", "amdhip64_6.dll"} {
 		lib, err := syscall.LoadLibrary(name)
 		if err == nil {
-			syscall.FreeLibrary(lib)
+			_ = syscall.FreeLibrary(lib)
 			return true
 		}
 	}
@@ -88,7 +88,7 @@ func hasOpenVINORuntime() bool {
 	if err != nil {
 		return false
 	}
-	syscall.FreeLibrary(lib)
+	_ = syscall.FreeLibrary(lib)
 	return true
 }
 
@@ -97,6 +97,6 @@ func hasVulkanRuntime() bool {
 	if err != nil {
 		return false
 	}
-	syscall.FreeLibrary(lib)
+	_ = syscall.FreeLibrary(lib)
 	return true
 }

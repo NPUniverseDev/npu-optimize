@@ -1,0 +1,5 @@
+# Normalize Go source to LF
+*.go text eol=lf
+
+# Auto-detect for everything else
+* text=auto
