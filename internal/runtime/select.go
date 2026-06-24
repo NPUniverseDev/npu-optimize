@@ -3,6 +3,7 @@ package runtime
 import (
 	"fmt"
 	"runtime"
+	"sort"
 	"strings"
 
 	"github.com/Ericson246/npu-optimize/internal/hwinfo"
@@ -54,14 +55,15 @@ func Select(hw *hwinfo.Info, prefer string, catalog *Catalog) (*RuntimeEntry, er
 	backends := priorityBackends(hw, prefer)
 
 	for _, b := range backends {
-		entry := findRuntime(catalog, platform, archStr, b)
+		entry := findRuntime(catalog, platform, archStr, b, hw)
 		if entry != nil {
 			return entry, nil
 		}
 	}
 
 	for _, src := range catalog.Sources {
-		for id, entry := range src.Runtimes {
+		for _, id := range sortedKeys(src.Runtimes) {
+			entry := src.Runtimes[id]
 			if entry.Platform == platform && entry.Arch == archStr {
 				entry.ID = id
 				return &entry, nil
@@ -126,18 +128,38 @@ func priorityBackends(hw *hwinfo.Info, prefer string) []Backend {
 	return result
 }
 
-func findRuntime(catalog *Catalog, platform, arch string, backend Backend) *RuntimeEntry {
+func findRuntime(catalog *Catalog, platform, arch string, backend Backend, hw *hwinfo.Info) *RuntimeEntry {
 	backendStr := backendString(backend)
 	if backendStr == "" {
 		return nil
 	}
 
+	var detectedLib string
+	if hw != nil && hw.GPU != nil {
+		for _, b := range hw.GPU.Backends {
+			if b.Name == backendStr {
+				detectedLib = b.DetectedLib
+				break
+			}
+		}
+	}
+
 	for _, src := range catalog.Sources {
-		for id, entry := range src.Runtimes {
+		for _, id := range sortedKeys(src.Runtimes) {
+			entry := src.Runtimes[id]
 			if entry.Platform != platform || entry.Arch != arch {
 				continue
 			}
 			if !strings.HasPrefix(entry.Backend, backendStr) && !strings.Contains(entry.ID, backendStr) {
+				continue
+			}
+			if detectedLib != "" && len(entry.RequiresLib) > 0 {
+				for _, req := range entry.RequiresLib {
+					if req == detectedLib {
+						entry.ID = id
+						return &entry
+					}
+				}
 				continue
 			}
 			entry.ID = id
@@ -146,6 +168,15 @@ func findRuntime(catalog *Catalog, platform, arch string, backend Backend) *Runt
 	}
 
 	return nil
+}
+
+func sortedKeys(m map[string]RuntimeEntry) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
 }
 
 func backendString(b Backend) string {

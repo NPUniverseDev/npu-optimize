@@ -6,6 +6,7 @@ import (
 
 	"github.com/Ericson246/npu-optimize/internal/hwinfo"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func testCatalog() *Catalog {
@@ -17,15 +18,30 @@ func testCatalog() *Catalog {
 				Repo: "ggml-org/llama.cpp",
 				Runtimes: map[string]RuntimeEntry{
 					"windows-cuda-12.4-x64": {
-						ID:          "windows-cuda-12.4-x64",
-						Platform:    "windows",
-						Arch:        "x64",
-						Backend:     "cuda",
-						Version:     "b9704",
-						DownloadURL: "https://example.com/cuda.zip",
-						SizeBytes:   1000,
-						Format:      "zip",
-						SourceName:  "ggml-org/llama.cpp",
+						ID:             "windows-cuda-12.4-x64",
+						Platform:       "windows",
+						Arch:           "x64",
+						Backend:        "cuda",
+						BackendVersion: "12.4",
+						Version:        "b9704",
+						DownloadURL:    "https://example.com/cuda-12.zip",
+						SizeBytes:      1000,
+						Format:         "zip",
+						SourceName:     "ggml-org/llama.cpp",
+						RequiresLib:    []string{"cudart64_12.dll"},
+					},
+					"windows-cuda-11.8-x64": {
+						ID:             "windows-cuda-11.8-x64",
+						Platform:       "windows",
+						Arch:           "x64",
+						Backend:        "cuda",
+						BackendVersion: "11.8",
+						Version:        "b9704",
+						DownloadURL:    "https://example.com/cuda-11.zip",
+						SizeBytes:      950,
+						Format:         "zip",
+						SourceName:     "ggml-org/llama.cpp",
+						RequiresLib:    []string{"cudart64_11.dll"},
 					},
 					"windows-vulkan-x64": {
 						ID:          "windows-vulkan-x64",
@@ -49,6 +65,32 @@ func testCatalog() *Catalog {
 						Format:      "zip",
 						SourceName:  "ggml-org/llama.cpp",
 					},
+					"linux-cuda-12.4-x64": {
+						ID:             "linux-cuda-12.4-x64",
+						Platform:       "linux",
+						Arch:           "x64",
+						Backend:        "cuda",
+						BackendVersion: "12.4",
+						Version:        "b9704",
+						DownloadURL:    "https://example.com/linux-cuda-12.tar.gz",
+						SizeBytes:      1100,
+						Format:         "tar.gz",
+						SourceName:     "ggml-org/llama.cpp",
+						RequiresLib:    []string{"libcudart.so.12"},
+					},
+					"linux-cuda-11.8-x64": {
+						ID:             "linux-cuda-11.8-x64",
+						Platform:       "linux",
+						Arch:           "x64",
+						Backend:        "cuda",
+						BackendVersion: "11.8",
+						Version:        "b9704",
+						DownloadURL:    "https://example.com/linux-cuda-11.tar.gz",
+						SizeBytes:      1050,
+						Format:         "tar.gz",
+						SourceName:     "ggml-org/llama.cpp",
+						RequiresLib:    []string{"libcudart.so.11"},
+					},
 					"linux-vulkan-x64": {
 						ID:          "linux-vulkan-x64",
 						Platform:    "linux",
@@ -57,17 +99,6 @@ func testCatalog() *Catalog {
 						Version:     "b9704",
 						DownloadURL: "https://example.com/linux-vulkan.tar.gz",
 						SizeBytes:   600,
-						Format:      "tar.gz",
-						SourceName:  "ggml-org/llama.cpp",
-					},
-					"linux-cuda-x64": {
-						ID:          "linux-cuda-x64",
-						Platform:    "linux",
-						Arch:        "x64",
-						Backend:     "cuda",
-						Version:     "b9704",
-						DownloadURL: "https://example.com/linux-cuda.tar.gz",
-						SizeBytes:   1100,
 						Format:      "tar.gz",
 						SourceName:  "ggml-org/llama.cpp",
 					},
@@ -151,13 +182,89 @@ func cpuOnlyHW() *hwinfo.Info {
 	}
 }
 
+func nvidiaCUDA12HW() *hwinfo.Info {
+	return &hwinfo.Info{
+		GPU: &hwinfo.GPUInfo{
+			Vendor:      "nvidia",
+			Name:        "RTX 4060",
+			VRAMTotalMB: 8192,
+			VRAMFreeMB:  7000,
+			Integrated:  false,
+			Backends: []hwinfo.BackendInfo{
+				{Name: "cuda", Version: "12", DetectedLib: "cudart64_12.dll"},
+				{Name: "vulkan"},
+			},
+		},
+		CPU: hwinfo.CPUInfo{
+			Name:    "Intel",
+			Cores:   8,
+			Threads: 16,
+		},
+		RAMTotalMB: 32768,
+		RAMFreeMB:  24000,
+	}
+}
+
+func nvidiaCUDA11HW() *hwinfo.Info {
+	return &hwinfo.Info{
+		GPU: &hwinfo.GPUInfo{
+			Vendor:      "nvidia",
+			Name:        "GTX 1080",
+			VRAMTotalMB: 8192,
+			VRAMFreeMB:  6000,
+			Integrated:  false,
+			Backends: []hwinfo.BackendInfo{
+				{Name: "cuda", Version: "11", DetectedLib: "cudart64_11.dll"},
+			},
+		},
+		CPU: hwinfo.CPUInfo{
+			Name:    "Intel",
+			Cores:   4,
+			Threads: 8,
+		},
+		RAMTotalMB: 16384,
+		RAMFreeMB:  12000,
+	}
+}
+
 func TestSelect_CUDAPriority(t *testing.T) {
 	cat := testCatalog()
-	entry, err := Select(nvidiaHW(), "", cat)
+	entry, err := Select(nvidiaCUDA12HW(), "", cat)
 	assert.NoError(t, err)
 	assert.NotNil(t, entry)
 	assert.Equal(t, "cuda", entry.Backend)
 	assert.Equal(t, runtime.GOOS, entry.Platform)
+}
+
+func TestSelect_CUDAPicksExactLib(t *testing.T) {
+	cat := testCatalog()
+	entry, err := Select(nvidiaCUDA12HW(), "", cat)
+	assert.NoError(t, err)
+	require.NotNil(t, entry)
+	assert.Equal(t, "cuda", entry.Backend)
+	assert.Equal(t, "12.4", entry.BackendVersion)
+}
+
+func TestSelect_CUDA11PicksCUDA11(t *testing.T) {
+	cat := testCatalog()
+	entry, err := Select(nvidiaCUDA11HW(), "", cat)
+	assert.NoError(t, err)
+	require.NotNil(t, entry)
+	assert.Equal(t, "cuda", entry.Backend)
+	assert.Equal(t, "11.8", entry.BackendVersion)
+	assert.Contains(t, entry.DownloadURL, "cuda-11")
+}
+
+func TestSelect_CUDAVersionFallbackToFirst(t *testing.T) {
+	hw := nvidiaHW()
+	cat := testCatalog()
+	entry, err := Select(hw, "", cat)
+	assert.NoError(t, err)
+	require.NotNil(t, entry)
+	assert.Equal(t, "cuda", entry.Backend)
+	// No detected lib → first deterministic match
+	assert.NotEmpty(t, entry.ID)
+	assert.Equal(t, "b9704", entry.Version)
 }
 
 func TestSelect_PreferVulkan(t *testing.T) {
