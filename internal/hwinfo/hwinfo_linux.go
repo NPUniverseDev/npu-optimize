@@ -183,12 +183,22 @@ func readPCIIDs(vendorID, deviceID string) string {
 	return ""
 }
 
+type sysfsCandidate struct {
+	Vendor      string
+	Name        string
+	Driver      string
+	VRAMTotalMB int64
+	Integrated  bool
+}
+
 func detectVulkanGPUFallback(info *Info) bool {
 	entries, err := os.ReadDir("/sys/class/drm")
 	if err != nil {
 		slog.Debug("vulkan fallback sysfs: cannot read /sys/class/drm", "err", err)
 		return false
 	}
+
+	var candidates []sysfsCandidate
 
 	for _, entry := range entries {
 		if !isCardDevice(entry.Name()) {
@@ -249,26 +259,51 @@ func detectVulkanGPUFallback(info *Info) bool {
 			integrated = true
 		}
 
-		vramFreeMB := vramTotalMB
-		if integrated && info.RAMFreeMB < vramTotalMB {
-			vramFreeMB = info.RAMFreeMB
-		}
-
-		info.GPU = &GPUInfo{
+		candidates = append(candidates, sysfsCandidate{
 			Vendor:      vendor,
 			Name:        gpuName,
+			Driver:      driverName,
 			VRAMTotalMB: vramTotalMB,
-			VRAMFreeMB:  vramFreeMB,
 			Integrated:  integrated,
-		}
-
-		slog.Warn("vulkan GPU detected via sysfs fallback (vulkaninfo not found)",
-			"vendor", vendor, "gpu", gpuName,
-			"driver", driverName,
-			"vram_mb", vramTotalMB,
-		)
-		return true
+		})
 	}
 
-	return false
+	if len(candidates) == 0 {
+		return false
+	}
+
+	best := candidates[0]
+	for _, c := range candidates[1:] {
+		if c.Integrated && !best.Integrated {
+			continue
+		}
+		if !c.Integrated && best.Integrated {
+			best = c
+			continue
+		}
+		if c.VRAMTotalMB > best.VRAMTotalMB {
+			best = c
+		}
+	}
+
+	vramFreeMB := best.VRAMTotalMB
+	if best.Integrated && info.RAMFreeMB < best.VRAMTotalMB {
+		vramFreeMB = info.RAMFreeMB
+	}
+
+	info.GPU = &GPUInfo{
+		Vendor:      best.Vendor,
+		Name:        best.Name,
+		VRAMTotalMB: best.VRAMTotalMB,
+		VRAMFreeMB:  vramFreeMB,
+		Integrated:  best.Integrated,
+	}
+
+	slog.Warn("vulkan GPU detected via sysfs fallback (vulkaninfo not found)",
+		"vendor", best.Vendor, "gpu", best.Name,
+		"driver", best.Driver,
+		"vram_mb", best.VRAMTotalMB,
+		"candidates", len(candidates),
+	)
+	return true
 }
