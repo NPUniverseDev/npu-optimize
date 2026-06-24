@@ -74,6 +74,10 @@ type Recommended struct {
 	NExperts         *int     `json:"n_experts,omitempty"`
 	NExpertsUsed     *int     `json:"n_experts_used,omitempty"`
 	NMTPHeads        *int     `json:"n_mtp_heads,omitempty"`
+	NumParameters    int64    `json:"num_parameters,omitempty"`
+	Quantization     string   `json:"quantization,omitempty"`
+	Score            float64  `json:"score,omitempty"`
+	ArchTier         string   `json:"arch_tier,omitempty"`
 	FitsInVRAM       bool     `json:"fits_in_vram"`
 	VRAMFormulaUsed  string   `json:"vram_formula_used"`
 	VRAMMarginMB     int      `json:"vram_margin_mb"`
