@@ -9,12 +9,13 @@ import (
 	"strings"
 )
 
-func (c *Client) SearchModels(filters []string, limit int) ([]ModelInfo, error) {
+func (c *Client) SearchModels(search, numParams string, limit int) ([]ModelInfo, error) {
 	u, _ := url.Parse(c.BaseURL + "/api/models")
 	q := u.Query()
 
-	for _, f := range filters {
-		q.Add("filter", f)
+	q.Set("search", search)
+	if numParams != "" {
+		q.Set("num_parameters", numParams)
 	}
 	q.Set("sort", "downloads")
 	q.Set("direction", "-1")
@@ -111,10 +112,10 @@ func (c *Client) GetPathsInfo(repo string, paths []string) ([]PathsInfoEntry, er
 	return entries, nil
 }
 
-func (c *Client) GetGGUFHeader(repo, file string) ([]byte, error) {
+func (c *Client) GetGGUFHeader(repo, file string, maxSize int) ([]byte, error) {
 	rawURL := fmt.Sprintf("%s/%s/resolve/main/%s", c.BaseURL, repo, file)
 
-	cacheKey := c.cacheKey("gguf", rawURL)
+	cacheKey := c.cacheKey("gguf", fmt.Sprintf("%s|%d", rawURL, maxSize))
 	if cached, ok := c.getFromCache(cacheKey); ok {
 		return cached, nil
 	}
@@ -125,7 +126,7 @@ func (c *Client) GetGGUFHeader(repo, file string) ([]byte, error) {
 			return nil, err
 		}
 		c.setHeaders(req)
-		req.Header.Set("Range", "bytes=0-262144")
+		req.Header.Set("Range", fmt.Sprintf("bytes=0-%d", maxSize-1))
 		return c.HTTPClient.Do(req)
 	})
 	if err != nil {

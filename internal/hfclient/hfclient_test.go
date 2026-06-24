@@ -35,7 +35,7 @@ func TestSearchModels_Success(t *testing.T) {
 		BaseURL:    server.URL,
 		HTTPClient: server.Client(),
 	}
-	models, err := client.SearchModels([]string{"gguf", "text-generation"}, 5)
+	models, err := client.SearchModels("gguf", "", 5)
 	require.NoError(t, err)
 	require.Len(t, models, 1)
 	assert.Equal(t, "test/model", models[0].ModelID)
@@ -53,7 +53,7 @@ func TestSearchModels_EmptyResult(t *testing.T) {
 		BaseURL:    server.URL,
 		HTTPClient: server.Client(),
 	}
-	models, err := client.SearchModels([]string{"gguf"}, 5)
+	models, err := client.SearchModels("gguf", "", 5)
 	require.NoError(t, err)
 	assert.Empty(t, models)
 }
@@ -68,7 +68,7 @@ func TestSearchModels_Unauthorized(t *testing.T) {
 		BaseURL:    server.URL,
 		HTTPClient: server.Client(),
 	}
-	_, err := client.SearchModels([]string{"gguf"}, 5)
+	_, err := client.SearchModels("gguf", "", 5)
 	require.Error(t, err)
 
 	var authErr *AuthError
@@ -86,7 +86,7 @@ func TestSearchModels_Forbidden(t *testing.T) {
 		BaseURL:    server.URL,
 		HTTPClient: server.Client(),
 	}
-	_, err := client.SearchModels([]string{"gguf"}, 5)
+	_, err := client.SearchModels("gguf", "", 5)
 	require.Error(t, err)
 
 	var authErr *AuthError
@@ -106,7 +106,7 @@ func TestSearchModels_RateLimited_RetryExhausted(t *testing.T) {
 		BaseURL:    server.URL,
 		HTTPClient: server.Client(),
 	}
-	_, err := client.SearchModels([]string{"gguf"}, 5)
+	_, err := client.SearchModels("gguf", "", 5)
 	require.Error(t, err)
 	assert.Equal(t, maxRetries, attempts)
 
@@ -132,7 +132,7 @@ func TestSearchModels_RetryThenSuccess(t *testing.T) {
 		BaseURL:    server.URL,
 		HTTPClient: server.Client(),
 	}
-	models, err := client.SearchModels([]string{"gguf"}, 5)
+	models, err := client.SearchModels("gguf", "", 5)
 	require.NoError(t, err)
 	assert.Len(t, models, 1)
 	assert.Equal(t, 3, attempts)
@@ -155,7 +155,7 @@ func TestSearchModels_RetryOn5xx(t *testing.T) {
 		BaseURL:    server.URL,
 		HTTPClient: server.Client(),
 	}
-	models, err := client.SearchModels([]string{"gguf"}, 5)
+	models, err := client.SearchModels("gguf", "", 5)
 	require.NoError(t, err)
 	assert.Len(t, models, 1)
 	assert.Equal(t, 3, attempts)
@@ -173,7 +173,7 @@ func TestSearchModels_5xxExhausted(t *testing.T) {
 		BaseURL:    server.URL,
 		HTTPClient: server.Client(),
 	}
-	_, err := client.SearchModels([]string{"gguf"}, 5)
+	_, err := client.SearchModels("gguf", "", 5)
 	require.Error(t, err)
 	assert.Equal(t, maxRetries, attempts)
 	assert.Contains(t, err.Error(), "server error")
@@ -206,7 +206,7 @@ func TestGetTree_Success(t *testing.T) {
 
 func TestGetGGUFHeader_PartialContent(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Contains(t, r.Header.Get("Range"), "bytes=0-262144")
+		assert.Contains(t, r.Header.Get("Range"), "bytes=0-1048575")
 		w.Header().Set("Content-Type", "application/octet-stream")
 		w.WriteHeader(http.StatusPartialContent)
 		w.Write([]byte{0x47, 0x47, 0x55, 0x46}) // dummy GGUF magic
@@ -217,7 +217,7 @@ func TestGetGGUFHeader_PartialContent(t *testing.T) {
 		BaseURL:    server.URL,
 		HTTPClient: server.Client(),
 	}
-	data, err := client.GetGGUFHeader("test/repo", "model.gguf")
+	data, err := client.GetGGUFHeader("test/repo", "model.gguf", 1048576)
 	require.NoError(t, err)
 	assert.NotEmpty(t, data)
 }
@@ -251,13 +251,13 @@ func TestCache_SearchModels_Hit(t *testing.T) {
 		Cache:      memCache,
 	}
 
-	models1, err := client.SearchModels([]string{"gguf"}, 5)
+	models1, err := client.SearchModels("gguf", "", 5)
 	require.NoError(t, err)
 	require.Len(t, models1, 1)
 	assert.Equal(t, "cached/model", models1[0].ModelID)
 	assert.Equal(t, 1, hitCount)
 
-	models2, err := client.SearchModels([]string{"gguf"}, 5)
+	models2, err := client.SearchModels("gguf", "", 5)
 	require.NoError(t, err)
 	require.Len(t, models2, 1)
 	assert.Equal(t, "cached/model", models2[0].ModelID)
@@ -308,11 +308,11 @@ func TestCache_GetGGUFHeader_Hit(t *testing.T) {
 		Cache:      memCache,
 	}
 
-	data1, err := client.GetGGUFHeader("test/repo", "model.gguf")
+	data1, err := client.GetGGUFHeader("test/repo", "model.gguf", 1048576)
 	require.NoError(t, err)
 	assert.NotEmpty(t, data1)
 
-	data2, err := client.GetGGUFHeader("test/repo", "model.gguf")
+	data2, err := client.GetGGUFHeader("test/repo", "model.gguf", 1048576)
 	require.NoError(t, err)
 	assert.NotEmpty(t, data2)
 	assert.Equal(t, 1, hitCount, "should not hit server again")
@@ -331,7 +331,7 @@ func TestCache_NilCache_NoCrash(t *testing.T) {
 		Cache:      nil,
 	}
 
-	models, err := client.SearchModels([]string{"gguf"}, 5)
+	models, err := client.SearchModels("gguf", "", 5)
 	require.NoError(t, err)
 	require.Len(t, models, 1)
 }
