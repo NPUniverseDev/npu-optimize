@@ -52,9 +52,9 @@ func extractQuant(filename string) string {
 }
 
 type QuantMatch struct {
-	File        string
-	Quant       QuantVariant
-	SizeBytes   int64
+	File      string
+	Quant     QuantVariant
+	SizeBytes int64
 }
 
 func findQuantFiles(siblings []hfclient.Sibling, sizeFn func(string) int64) []QuantMatch {

@@ -35,21 +35,6 @@ func newMockHW(vramFreeMB int64) *hwinfo.Info {
 	}
 }
 
-func buildModel(id, file string, createdAt time.Time, tags []string) hfclient.ModelInfo {
-	return hfclient.ModelInfo{
-		ID:          id,
-		ModelID:     id,
-		CreatedAt:   createdAt,
-		PipelineTag: "text-generation",
-		Tags:        tags,
-		ContextLen:  8192,
-		Siblings: []hfclient.Sibling{
-			{RFilename: "readme.md", Type: "file"},
-			{RFilename: file, Type: "file"},
-		},
-	}
-}
-
 func buildMultiQuantModel(id string, createdAt time.Time, tags []string, files []string) hfclient.ModelInfo {
 	sibs := make([]hfclient.Sibling, 0, len(files)+1)
 	sibs = append(sibs, hfclient.Sibling{RFilename: "readme.md", Type: "file"})
@@ -397,9 +382,9 @@ func TestSearchModels_SearchParam(t *testing.T) {
 		searchParam = r.URL.Query().Get("search")
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode([]hfclient.ModelInfo{{
-			ModelID: "test/model",
+			ModelID:   "test/model",
 			CreatedAt: time.Now(),
-			Tags:   []string{"gguf"},
+			Tags:      []string{"gguf"},
 		}})
 	}))
 	defer server.Close()

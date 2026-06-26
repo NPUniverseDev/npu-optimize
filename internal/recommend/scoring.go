@@ -25,7 +25,7 @@ func scoreModel(numParams int64, archTier ArchTier, quantQuality float64,
 
 	// Parameter score: log-scale normalized, cap at 1.0
 	// log(1 + params) / log(1 + 405e9) → 7B=0.49, 70B=0.66, 405B=1.0
-	paramScore := math.Log(float64(numParams) + 1) / math.Log(406e9)
+	paramScore := math.Log(float64(numParams)+1) / math.Log(406e9)
 	if paramScore > 1.0 {
 		paramScore = 1.0
 	}

@@ -11,17 +11,6 @@ import (
 	"github.com/Ericson246/npu-optimize/internal/hwinfo"
 )
 
-func friendlySize(b int64) string {
-	switch {
-	case b >= 1<<40:
-		return fmt.Sprintf("%.1f TB", float64(b)/float64(1<<40))
-	case b >= 1<<30:
-		return fmt.Sprintf("%.1f GB", float64(b)/float64(1<<30))
-	default:
-		return fmt.Sprintf("%.0f MB", float64(b)/float64(1<<20))
-	}
-}
-
 type Config struct {
 	CtxSize           int
 	VRAMMargin        int
@@ -57,14 +46,14 @@ type Fallback struct {
 }
 
 type candidate struct {
-	model         hfclient.ModelInfo
-	siblingSizes  map[string]int64
-	siblingSHAs   map[string]string
-	header        *GGUFHeader
-	archTier      ArchTier
-	scored        bool
-	bestQuant     QuantMatch
-	bestScore     CandidateScore
+	model        hfclient.ModelInfo
+	siblingSizes map[string]int64
+	siblingSHAs  map[string]string
+	header       *GGUFHeader
+	archTier     ArchTier
+	scored       bool
+	bestQuant    QuantMatch
+	bestScore    CandidateScore
 }
 
 func (c candidate) sizeOf(file string) int64 {
