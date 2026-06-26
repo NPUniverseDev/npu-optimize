@@ -6,7 +6,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![GitHub Release](https://img.shields.io/github/v/release/Ericson246/npu-optimize?logo=github)](https://github.com/Ericson246/npu-optimize/releases)
 
-**npu-optimize** detects your hardware, recommends a compatible llama.cpp runtime (CUDA, Vulkan, ROCm, Metal, OpenVINO, CPU), searches HuggingFace for GGUF models, and calculates the optimal inference configuration for [llama.cpp](https://github.com/ggml-org/llama.cpp).
+**npu-optimize** detects your hardware, queries HuggingFace for GGUF models, calculates optimal inference configuration for [llama.cpp](https://github.com/ggml-org/llama.cpp), and optionally runs benchmarks to validate performance.
 
 No models are downloaded — it's a dry-run that tells you what would work best on your machine.
 
@@ -18,7 +18,7 @@ No models are downloaded — it's a dry-run that tells you what would work best 
 npu-optimize detect
 ```
 
-This detects your GPU (or CPU), queries HuggingFace for the most popular GGUF models, and outputs a JSON recommendation with optimal inference parameters.
+This detects your GPU (or CPU), queries HuggingFace for GGUF models, and outputs a JSON recommendation with optimal inference parameters using a multi-factor scoring system (architecture tier, parameter count, quantization quality, and more).
 
 ---
 
@@ -43,25 +43,48 @@ Pre-built binaries:
 
 ## Usage
 
-### `detect` — Hardware detection + runtime + model recommendation (v0.3.0)
+```
+npu-optimize [command]
+```
 
-```bash
+Available Commands:
+
+| Command | Description |
+|---------|-------------|
+| `completion` | Generate the autocompletion script for the specified shell |
+| `detect` | Detect hardware and recommend a model (dry-run, no downloads) |
+| `help` | Help about any command |
+
+### Global Flags
+
+```
+      --config string                Path to config file
+      --llama-bench-version string   llama-bench version to use (default "b9180")
+      --log-format string            Log format: text or json (default "text")
+      --model-dir string             Directory for model files (default "./models")
+  -o, --output string                Output format: json or text (default "json")
+      --output-schema-version int    Requested output schema version (default 1)
+  -t, --token string                 HuggingFace token (also reads HF_TOKEN, NPU_OPTIMIZE_TOKEN)
+  -v, --verbose count                Verbosity level (-v, -vv, -vvv)
+```
+
+### `detect`
+
+Detects your hardware (GPU, VRAM, CPU, RAM), queries HuggingFace API for compatible GGUF models, and recommends the best configuration. This is a dry-run: no models are downloaded.
+
+```
 npu-optimize detect [flags]
 ```
 
 | Flag | Default | Description |
 |------|---------|-------------|
-| `--mode` / `-m` | `auto` | Detection mode: `auto`, `gpu-only`, `cpu`, `partial` |
-| `--ctx-size` / `-c` | `16384` | Minimum required context size |
+| `-c, --ctx-size` | `16384` | Minimum required context size |
+| `-h, --help` | | help for detect |
+| `-m, --mode` | `auto` | Detection mode: auto, gpu-only, cpu, partial |
+| `--prefer-backend` | `""` | Preferred inference backend: cuda, rocm, openvino, vulkan, cpu |
 | `--vram-margin` | `1024` | VRAM safety margin in MB |
-| `--token` / `-t` | `""` | HuggingFace token (for gated models or higher rate limits) |
-| `--model-dir` | `./models` | Directory for model files |
-| `--output` / `-o` | `json` | Output format (`json` or `text`) |
-| `--output-schema-version` | `1` | Requested output schema version (`1`, `2`, `3`) |
-| `--verbose` / `-v` | `0` | Verbosity level (`-v`, `-vv`, `-vvv`) |
-| `--prefer-backend` | `""` | Prefer a specific GPU backend: `cuda`, `rocm`, `vulkan`, `openvino`, `cpu` |
-| `--config` | `""` | Path to config file |
-| `--log-format` | `text` | Log format (`text` or `json`) |
+
+Global Flags also apply (see above).
 
 #### Mode selection
 
@@ -71,6 +94,16 @@ npu-optimize detect [flags]
 | `gpu-only` | Use only GPU VRAM. Requires a discrete NVIDIA GPU |
 | `cpu` | Use only system RAM. Compatible with any hardware |
 | `partial` | Uses GPU VRAM + 30% of free system RAM |
+
+### `completion`
+
+Generate the autocompletion script for the specified shell.
+
+```
+npu-optimize completion [command]
+```
+
+Available subcommands: `bash`, `fish`, `powershell`, `zsh`.
 
 ---
 
@@ -120,12 +153,17 @@ npu-optimize detect [flags]
   "recommended": {
     "repo": "unsloth/Qwen3-Coder-Next-GGUF",
     "file": "Qwen3-Coder-Next-Q4_K_M.gguf",
+    "size_bytes": 5242880000,
     "architecture": "qwen3next",
     "architecture_type": "dense",
     "multimodal": false,
     "n_layers": 32,
     "n_kv_heads": 8,
     "head_dim": 128,
+    "num_parameters": 7630000000,
+    "quantization": "Q4_K_M",
+    "score": 0.8342,
+    "arch_tier": "cutting_edge",
     "fits_in_vram": true,
     "vram_formula_used": "manual",
     "vram_margin_mb": 1024,
@@ -209,21 +247,18 @@ Hardware detection (GPU backends, CPU ISA, RAM)
     ↓
 Runtime selection (CUDA → ROCm → OpenVINO → Vulkan → CPU priority)
     ↓
-HuggingFace API search (top GGUF models)
+HF API search (single call with num_parameters filter)
     ↓
-GGUF header parsing (architecture, layers, context)
+Pipeline + Age filtering
+    ↓
+GGUF header parsing + Architecture classification (4 tiers)
+    ↓
+Multi-factor scoring (arch 35% + params 25% + quant 15% + ...)
     ↓
 VRAM calculation → optimal config + ctx_max estimate
     ↓
 JSON output (stdout) + optional logs (stderr)
 ```
-
-For full architecture details, see:
-- [ADR-001: Architecture](docs/ADR-001-npu-optimize.md)
-- [ADR-002: Benchmark and Extrapolation](docs/ADR-002-benchmark-and-extrapolation.md)
-- [ADR-003: Output Schema and Contract](docs/ADR-003-schema-and-contract.md)
-- [ADR-004: Testing and Quality](docs/ADR-004-testing-and-quality.md)
-- [ADR-006: Runtime Management](docs/ADR-006-runtime-management.md)
 
 ---
 
