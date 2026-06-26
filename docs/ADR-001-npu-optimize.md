@@ -1,7 +1,7 @@
 # ADR-001: npu-optimize — Architecture
 
 **Date:** 2026-06-14 (v2)
-**Status:** Accepted
+**Status:** Obsoleto — sustituido por ADR-007
 **Repo:** `github.com/Ericson246/npu-optimize`
 
 ## Context

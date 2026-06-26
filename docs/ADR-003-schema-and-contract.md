@@ -1,7 +1,7 @@
 # ADR-003: Output Schema and Integration Contract
 
 **Date:** 2026-06-14
-**Status:** Accepted
+**Status:** Obsoleto — el contrato vivo está en README.md, schema.go y docs/schemas/
 **Repo:** `github.com/Ericson246/npu-optimize`
 
 ## Context

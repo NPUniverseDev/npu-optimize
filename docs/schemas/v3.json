@@ -1,0 +1,166 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://Ericson246.github.io/npu-optimize/schemas/v3.json",
+  "title": "npu-optimize Output Schema v3",
+  "type": "object",
+  "properties": {
+    "$schema": { "type": "string" },
+    "version": { "type": "integer", "const": 3 },
+    "generated_at": { "type": "string", "format": "date-time" },
+    "tool_version": { "type": "string" },
+    "backend": { "type": "string", "const": "llama.cpp" },
+    "mode_used": { "type": "string", "enum": ["auto", "gpu-only", "cpu", "partial"] },
+    "viable": { "type": "boolean" },
+    "hardware_fingerprint": { "type": "string" },
+    "hardware": {
+      "type": "object",
+      "properties": {
+        "gpu": {
+          "type": "object",
+          "properties": {
+            "vendor": { "type": "string" },
+            "name": { "type": "string" },
+            "vram_total_mb": { "type": "integer" },
+            "vram_free_mb": { "type": "integer" },
+            "integrated": { "type": "boolean" },
+            "backends": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "name": { "type": "string" },
+                  "version": { "type": "string" },
+                  "detected_lib": { "type": "string" }
+                },
+                "required": ["name"]
+              }
+            }
+          },
+          "required": ["vendor", "name", "vram_total_mb", "vram_free_mb", "integrated"]
+        },
+        "cpu": {
+          "type": "object",
+          "properties": {
+            "name": { "type": "string" },
+            "cores": { "type": "integer" },
+            "threads": { "type": "integer" },
+            "isa": {
+              "type": "array",
+              "items": { "type": "string" }
+            }
+          },
+          "required": ["name", "cores", "threads"]
+        },
+        "ram_total_mb": { "type": "integer" },
+        "ram_free_mb": { "type": "integer" }
+      },
+      "required": ["cpu", "ram_total_mb", "ram_free_mb"]
+    },
+    "runtime_recommendation": {
+      "type": "object",
+      "properties": {
+        "backend": { "type": "string" },
+        "backend_version": { "type": "string" },
+        "version": { "type": "string" },
+        "source": { "type": "string" },
+        "download_url": { "type": "string", "format": "uri" },
+        "sha256": { "type": "string" },
+        "size_bytes": { "type": "integer" },
+        "format": { "type": "string" }
+      },
+      "required": ["backend", "source", "download_url", "sha256", "size_bytes", "format"]
+    },
+    "recommended": {
+      "type": "object",
+      "properties": {
+        "repo": { "type": "string" },
+        "file": { "type": "string" },
+        "download_url": { "type": "string" },
+        "sha256": { "type": "string" },
+        "size_bytes": { "type": "integer" },
+        "architecture": { "type": "string" },
+        "architecture_type": { "type": "string", "enum": ["dense", "moe"] },
+        "multimodal": { "type": "boolean" },
+        "n_layers": { "type": "integer" },
+        "n_kv_heads": { "type": "integer" },
+        "head_dim": { "type": "integer" },
+        "n_experts": { "type": "integer" },
+        "n_experts_used": { "type": "integer" },
+        "n_mtp_heads": { "type": "integer" },
+        "num_parameters": { "type": "integer" },
+        "quantization": { "type": "string" },
+        "score": { "type": "number" },
+        "arch_tier": { "type": "string", "enum": ["cutting_edge", "current_gen", "previous_gen", "legacy", "unknown"] },
+        "fits_in_vram": { "type": "boolean" },
+        "vram_formula_used": { "type": "string" },
+        "vram_margin_mb": { "type": "integer" },
+        "n_gpu_layers": { "type": "integer" },
+        "ctx_max_estimate": { "type": "integer" },
+        "ts_estimated": { "type": "number" }
+      },
+      "required": ["repo", "file", "size_bytes", "architecture", "architecture_type", "multimodal", "n_layers", "n_kv_heads", "head_dim", "fits_in_vram", "vram_formula_used", "vram_margin_mb", "n_gpu_layers", "ctx_max_estimate"]
+    },
+    "inference_params": {
+      "type": "object",
+      "properties": {
+        "n_gpu_layers": { "type": "integer" },
+        "threads": { "type": "integer" },
+        "n_batch": { "type": "integer" },
+        "n_ubatch": { "type": "integer" },
+        "ctx_size": { "type": "integer" },
+        "flash_attn": { "type": "boolean" },
+        "cache_type_k": { "type": "string" },
+        "cache_type_v": { "type": "string" }
+      },
+      "required": ["n_gpu_layers", "threads", "n_batch", "n_ubatch", "ctx_size", "flash_attn", "cache_type_k", "cache_type_v"]
+    },
+    "backend_params": {
+      "type": "object",
+      "properties": {
+        "llama.cpp": {
+          "type": "object",
+          "properties": {
+            "no_mmap": { "type": "boolean" },
+            "mlock": { "type": "boolean" },
+            "cpu_moe": { "type": "boolean" },
+            "spec_type": { "type": "string" }
+          },
+          "required": ["no_mmap", "mlock", "cpu_moe"]
+        }
+      },
+      "required": ["llama.cpp"]
+    },
+    "fallbacks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "file": { "type": "string" },
+          "size_bytes": { "type": "integer" },
+          "sha256": { "type": "string" },
+          "fits_in_vram": { "type": "boolean" },
+          "reason": { "type": "string" }
+        },
+        "required": ["file", "size_bytes", "fits_in_vram", "reason"]
+      }
+    },
+    "error": {
+      "type": "object",
+      "properties": {
+        "$schema": { "type": "string" },
+        "version": { "type": "integer" },
+        "error": { "type": "boolean", "const": true },
+        "error_code": { "type": "integer" },
+        "error_type": { "type": "string" },
+        "message": { "type": "string" },
+        "details": {}
+      },
+      "required": ["error", "error_code", "error_type", "message"]
+    }
+  },
+  "required": ["$schema", "version", "generated_at", "tool_version", "backend", "mode_used", "viable", "hardware_fingerprint", "hardware"],
+  "oneOf": [
+    { "required": ["recommended", "inference_params", "backend_params"] },
+    { "required": ["error"] }
+  ]
+}

@@ -14,7 +14,7 @@ golangci-lint run
 
 ## ADRs
 Architecture documentation is in docs/ADR-*.md.
-Read the ADRs before making significant changes.
+Read the README.md and relevant source code before making significant changes.
 
 ## Conventions
 - Go 1.26+

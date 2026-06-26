@@ -190,7 +190,51 @@ Available subcommands: `bash`, `fish`, `powershell`, `zsh`.
 }
 ```
 
-> **Exit codes:** `0` = viable recommendation, `1` = internal error, `2` = no viable model found, `3` = unsupported hardware, `4` = authentication required.
+---
+
+## Output contract
+
+### Channels
+
+| Channel | Content |
+|---------|---------|
+| stdout  | Success JSON (schema v1/v2/v3) |
+| stderr  | Log messages + ErrorOutput JSON on failure |
+
+### Exit codes
+
+| Code | Meaning |
+|------|---------|
+| `0` | Viable recommendation |
+| `1` | Internal error |
+| `2` | No viable model found |
+| `3` | Unsupported hardware |
+| `4` | Authentication required |
+
+### Error schema
+
+When a non-zero exit code is returned, stdout contains an error JSON:
+
+```json
+{
+  "$schema": "https://Ericson246.github.io/npu-optimize/schemas/v3.json",
+  "version": 3,
+  "error": true,
+  "error_code": 2,
+  "error_type": "no_viable_model",
+  "message": "No model fits in available VRAM"
+}
+```
+
+### Schema versioning
+
+| Version | Added in | Description |
+|---------|----------|-------------|
+| `1` | v0.1.0 | Minimal output with hardware + inference params |
+| `2` | v0.2.0 | Adds `runtime_recommendation` with backend/version/URL |
+| `3` | v0.3.0 | `backends` as `BackendInfo[]` (name, version, detected_lib). Adds `num_parameters`, `quantization`, `score`, `arch_tier`. Adds `backend_version` in runtime recommendation |
+
+Use `--output-schema-version` to request a specific version.
 
 ---
 
