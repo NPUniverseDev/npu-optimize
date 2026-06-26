@@ -82,7 +82,7 @@ npu-optimize detect [flags]
 | `-h, --help` | | help for detect |
 | `-m, --mode` | `auto` | Detection mode: auto, gpu-only, cpu, partial |
 | `--prefer-backend` | `""` | Preferred inference backend: cuda, rocm, openvino, vulkan, cpu |
-| `--vram-margin` | `1024` | VRAM safety margin in MB |
+| `--vram-margin` | `0` (auto) | VRAM safety margin in MB. 0 = 5% of free VRAM (min 256, max 1024) |
 
 Global Flags also apply (see above).
 
@@ -90,8 +90,8 @@ Global Flags also apply (see above).
 
 | Mode | Description |
 |------|-------------|
-| `auto` | Automatically selects the best mode based on detected hardware |
-| `gpu-only` | Use only GPU VRAM. Requires a discrete NVIDIA GPU |
+| `auto` | Automatically selects the best mode: discrete GPU ≥4GB VRAM → gpu-only; discrete GPU <4GB VRAM or integrated GPU → partial; no GPU → cpu |
+| `gpu-only` | Use only GPU VRAM. Requires a discrete GPU with ≥3 GB of VRAM (any vendor) |
 | `cpu` | Use only system RAM. Compatible with any hardware |
 | `partial` | Uses GPU VRAM + 30% of free system RAM |
 
@@ -165,8 +165,8 @@ Available subcommands: `bash`, `fish`, `powershell`, `zsh`.
     "score": 0.8342,
     "arch_tier": "cutting_edge",
     "fits_in_vram": true,
-    "vram_formula_used": "manual",
-    "vram_margin_mb": 1024,
+    "vram_formula_used": "auto",
+    "vram_margin_mb": 400,
     "n_gpu_layers": -1,
     "ctx_max_estimate": 32768
   },

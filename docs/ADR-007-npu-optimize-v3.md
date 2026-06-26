@@ -84,7 +84,9 @@ JSON output (stdout) + optional logs (stderr)
 - **Quantization ranking:** ordered by quality (Q8_0 → Q2_K)
 - **Scoring formula:** arch 35% + params 25% + quant 15% + popularity 10% + context 10% + MTP 5%
 - **GGUF headers:** progressively downloaded (512KB → 16MB) with retry
-- **VRAM:** manual formula (`file_size + kv_cache + overhead`), no llama-bench in v0.3.0
+- **VRAM:** manual formula (`file_size + kv_cache + overhead`), dynamic margin (5% of free VRAM, min 256 MB, max 1 GB), no llama-bench in v0.3.0
+- **Auto mode decision tree:** discrete GPU ≥4 GB VRAM → `gpu-only`; discrete GPU <4 GB VRAM or integrated GPU → `partial` (VRAM + 70% RAM); no GPU → `cpu`
+- **GPU-only mode:** accepts any discrete GPU with ≥3 GB VRAM (not just NVIDIA)
 
 ### What Is Not Implemented
 
