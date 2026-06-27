@@ -1,5 +1,29 @@
 # Changelog
 
+## [0.3.0](https://github.com/Ericson246/npu-optimize/compare/v0.2.1...v0.3.0) (2026-06-27)
+
+
+### Features
+
+* add BackendInfo struct with versioned backend detection ([4dc0316](https://github.com/Ericson246/npu-optimize/commit/4dc031661476c3f9de2ac5824e8e822ed79ae8ba))
+* add schema v3 output ([75e6863](https://github.com/Ericson246/npu-optimize/commit/75e6863cc1f9f11c091dbb328e1625efdcaa8388))
+* add scoring fields to output schema and wire in detect cmd ([899cafd](https://github.com/Ericson246/npu-optimize/commit/899cafdd1b9b66004523fd8ddfb0c974810778af))
+* implement multi-factor model scoring with architecture tiers and quantization ranking ([24a8e26](https://github.com/Ericson246/npu-optimize/commit/24a8e26062ec363b1ded5e15c0c9c916b64bcf7b))
+* improve mode selection with dynamic VRAM margin and vendor-agnostic gpu-only ([e637804](https://github.com/Ericson246/npu-optimize/commit/e637804fdd298715d103d869b6357c1e88fd60aa))
+* match runtime by detected library version ([a04abeb](https://github.com/Ericson246/npu-optimize/commit/a04abebe49dd136106b6b6e5003c254f95b3c497))
+* switch HF API to single search call with num_parameters and pipeline_tag filter ([2faa97e](https://github.com/Ericson246/npu-optimize/commit/2faa97e4a93813209ec96499272b4dafefc10a4a))
+
+
+### Bug Fixes
+
+* correct update-types format in Dependabot config ([4c0aa8f](https://github.com/Ericson246/npu-optimize/commit/4c0aa8f78b49b8956ffef51e38f0879bef677227))
+* detect Vulkan GPU without vulkaninfo binary ([#10](https://github.com/Ericson246/npu-optimize/issues/10)) ([a396003](https://github.com/Ericson246/npu-optimize/commit/a3960037ed9a966d1ec8acd35ef815c61f7dd4bd))
+* detect Vulkan runtime via libvulkan.so.1 and ldconfig fallback on Linux ([79a3529](https://github.com/Ericson246/npu-optimize/commit/79a3529919454b25807fad9ad1fb4a4c23b5bcbd))
+* make CUDA version tests cross-platform — use OS-appropriate library paths ([fb79d5f](https://github.com/Ericson246/npu-optimize/commit/fb79d5f7e46815a77369d8837de62951b280a434))
+* prefer discrete GPU over integrated in Linux sysfs fallback ([8cab1cc](https://github.com/Ericson246/npu-optimize/commit/8cab1ccbe2aba5cb98f51501a9681d74937997e1))
+* resolve lint issues blocking CI — gofmt + remove dead code ([d455f3e](https://github.com/Ericson246/npu-optimize/commit/d455f3e4bf19697ee6d4cb5e73476ce7f73a37f2))
+* skip auxiliary files (mmproj, MTP subdirs) in findQuantFiles and buildFallbacks ([a28fb74](https://github.com/Ericson246/npu-optimize/commit/a28fb74b626ef33a9e6d7f8c85ecba70014491c5))
+
 ## [0.2.1](https://github.com/Ericson246/npu-optimize/compare/v0.2.0...v0.2.1) (2026-06-22)
 
 
