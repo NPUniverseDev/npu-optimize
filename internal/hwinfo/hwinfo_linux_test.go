@@ -86,6 +86,14 @@ func TestParseSoVersion_OpenVINO(t *testing.T) {
 	assert.Equal(t, "2026", ver)
 }
 
+func TestParseSoVersion_Vulkan(t *testing.T) {
+	output := `libvulkan.so.1 (libc6,x86-64) => /usr/lib/x86_64-linux-gnu/libvulkan.so.1.3.275`
+	soname, ver, ok := parseSoVersion("libvulkan.so", output)
+	assert.True(t, ok)
+	assert.Equal(t, "libvulkan.so.1", soname)
+	assert.Equal(t, "1", ver)
+}
+
 func TestParseSoVersion_NoMatch(t *testing.T) {
 	output := `libcudart.so.12 (libc6,x86-64) => /usr/lib/libcudart.so.12.4`
 	_, _, ok := parseSoVersion("libnonexistent.so", output)

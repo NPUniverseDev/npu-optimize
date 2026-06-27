@@ -95,14 +95,16 @@ func detectOpenVINORuntime() (lib, version string, ok bool) {
 func detectVulkanRuntime() (lib, version string, ok bool) {
 	paths := []string{
 		"/usr/lib/x86_64-linux-gnu/libvulkan.so",
+		"/usr/lib/x86_64-linux-gnu/libvulkan.so.1",
 		"/usr/lib/aarch64-linux-gnu/libvulkan.so",
+		"/usr/lib/aarch64-linux-gnu/libvulkan.so.1",
 	}
 	for _, path := range paths {
 		if _, err := os.Stat(path); err == nil {
 			return path, "", true
 		}
 	}
-	return "", "", false
+	return detectSoVersion("libvulkan.so")
 }
 
 func detectSoVersion(soPrefix string) (lib, version string, ok bool) {
