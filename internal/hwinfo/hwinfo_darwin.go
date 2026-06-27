@@ -154,7 +154,7 @@ func detectVulkanGPUFallback(info *Info) bool {
 		Integrated:  integrated,
 	}
 
-	slog.Warn("vulkan GPU detected via system_profiler fallback (vulkaninfo not found)",
+	slog.Debug("vulkan GPU detected via system_profiler fallback (vulkaninfo not found)",
 		"vendor", vendor, "gpu", name,
 		"vram_mb", vramMB,
 	)

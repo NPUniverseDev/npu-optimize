@@ -145,7 +145,7 @@ func detectVulkanGPUFallback(info *Info) bool {
 	}
 
 	info.GPU = gpu
-	slog.Warn("vulkan GPU detected via WMI fallback (vulkaninfo not found)",
+	slog.Debug("vulkan GPU detected via WMI fallback (vulkaninfo not found)",
 		"vendor", gpu.Vendor, "gpu", gpu.Name,
 		"vram_mb", gpu.VRAMTotalMB,
 	)

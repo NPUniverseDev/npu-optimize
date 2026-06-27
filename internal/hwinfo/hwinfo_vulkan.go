@@ -74,7 +74,7 @@ func detectVulkanGPUWithVulkaninfo(info *Info) bool {
 	if vramTotalMB <= 0 {
 		vramTotalMB = info.RAMTotalMB / 2
 		isIntegrated = true
-		slog.Warn("vulkan GPU detected; VRAM estimated from RAM",
+		slog.Debug("vulkan GPU detected; VRAM estimated from RAM",
 			"vendor", vendor, "gpu", name,
 			"estimated_mb", vramTotalMB,
 		)
