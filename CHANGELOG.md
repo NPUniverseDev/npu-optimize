@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.1](https://github.com/Ericson246/npu-optimize/compare/v0.3.0...v0.3.1) (2026-07-03)
+
+
+### Bug Fixes
+
+* make runtime.Select accept explicit platform/arch parameters ([3de63df](https://github.com/Ericson246/npu-optimize/commit/3de63df908862b2751d909f7ee276dffeff3d6c8))
+
 ## [0.3.0](https://github.com/Ericson246/npu-optimize/compare/v0.2.1...v0.3.0) (2026-06-27)
 
 
