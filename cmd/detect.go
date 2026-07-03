@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	goruntime "runtime"
 
 	"github.com/Ericson246/npu-optimize/internal/cache"
 	"github.com/Ericson246/npu-optimize/internal/constants"
@@ -276,7 +277,7 @@ func runDetect() error {
 	if catErr != nil {
 		slog.Warn("failed to fetch runtime catalog", "err", catErr)
 	} else {
-		entry, selErr := runtime.Select(hw, preferBackend, catalog)
+		entry, selErr := runtime.Select(hw, preferBackend, catalog, goruntime.GOOS, goruntime.GOARCH)
 		if selErr != nil {
 			slog.Warn("runtime selection failed", "err", selErr)
 		} else if entry != nil {

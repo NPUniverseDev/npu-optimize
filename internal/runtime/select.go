@@ -2,7 +2,6 @@ package runtime
 
 import (
 	"fmt"
-	"runtime"
 	"sort"
 	"strings"
 
@@ -43,9 +42,7 @@ func backendFromString(s string) Backend {
 	}
 }
 
-func Select(hw *hwinfo.Info, prefer string, catalog *Catalog) (*RuntimeEntry, error) {
-	platform := runtime.GOOS
-	arch := runtime.GOARCH
+func Select(hw *hwinfo.Info, prefer string, catalog *Catalog, platform, arch string) (*RuntimeEntry, error) {
 
 	archStr := "x64"
 	if strings.Contains(arch, "arm64") || strings.Contains(arch, "aarch64") {

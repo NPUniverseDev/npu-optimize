@@ -1,7 +1,6 @@
 package runtime
 
 import (
-	"runtime"
 	"testing"
 
 	"github.com/Ericson246/npu-optimize/internal/hwinfo"
@@ -242,10 +241,6 @@ func cpuOnlyHW() *hwinfo.Info {
 }
 
 func nvidiaCUDA12HW() *hwinfo.Info {
-	detectedLib := "cudart64_12.dll"
-	if runtime.GOOS != "windows" {
-		detectedLib = "libcudart.so.12"
-	}
 	return &hwinfo.Info{
 		GPU: &hwinfo.GPUInfo{
 			Vendor:      "nvidia",
@@ -254,7 +249,7 @@ func nvidiaCUDA12HW() *hwinfo.Info {
 			VRAMFreeMB:  7000,
 			Integrated:  false,
 			Backends: []hwinfo.BackendInfo{
-				{Name: "cuda", Version: "12", DetectedLib: detectedLib},
+				{Name: "cuda", Version: "12", DetectedLib: "libcudart.so.12"},
 				{Name: "vulkan"},
 			},
 		},
@@ -269,10 +264,6 @@ func nvidiaCUDA12HW() *hwinfo.Info {
 }
 
 func nvidiaCUDA11HW() *hwinfo.Info {
-	detectedLib := "cudart64_11.dll"
-	if runtime.GOOS != "windows" {
-		detectedLib = "libcudart.so.11"
-	}
 	return &hwinfo.Info{
 		GPU: &hwinfo.GPUInfo{
 			Vendor:      "nvidia",
@@ -281,7 +272,7 @@ func nvidiaCUDA11HW() *hwinfo.Info {
 			VRAMFreeMB:  6000,
 			Integrated:  false,
 			Backends: []hwinfo.BackendInfo{
-				{Name: "cuda", Version: "11", DetectedLib: detectedLib},
+				{Name: "cuda", Version: "11", DetectedLib: "libcudart.so.11"},
 			},
 		},
 		CPU: hwinfo.CPUInfo{
@@ -296,16 +287,16 @@ func nvidiaCUDA11HW() *hwinfo.Info {
 
 func TestSelect_CUDAPriority(t *testing.T) {
 	cat := testCatalog()
-	entry, err := Select(nvidiaCUDA12HW(), "", cat)
+	entry, err := Select(nvidiaCUDA12HW(), "", cat, "linux", "amd64")
 	assert.NoError(t, err)
 	assert.NotNil(t, entry)
 	assert.Equal(t, "cuda", entry.Backend)
-	assert.Equal(t, runtime.GOOS, entry.Platform)
+	assert.Equal(t, "linux", entry.Platform)
 }
 
 func TestSelect_CUDAPicksExactLib(t *testing.T) {
 	cat := testCatalog()
-	entry, err := Select(nvidiaCUDA12HW(), "", cat)
+	entry, err := Select(nvidiaCUDA12HW(), "", cat, "linux", "amd64")
 	assert.NoError(t, err)
 	require.NotNil(t, entry)
 	assert.Equal(t, "cuda", entry.Backend)
@@ -314,7 +305,7 @@ func TestSelect_CUDAPicksExactLib(t *testing.T) {
 
 func TestSelect_CUDA11PicksCUDA11(t *testing.T) {
 	cat := testCatalog()
-	entry, err := Select(nvidiaCUDA11HW(), "", cat)
+	entry, err := Select(nvidiaCUDA11HW(), "", cat, "linux", "amd64")
 	assert.NoError(t, err)
 	require.NotNil(t, entry)
 	assert.Equal(t, "cuda", entry.Backend)
@@ -325,7 +316,7 @@ func TestSelect_CUDA11PicksCUDA11(t *testing.T) {
 func TestSelect_CUDAVersionFallbackToFirst(t *testing.T) {
 	hw := nvidiaHW()
 	cat := testCatalog()
-	entry, err := Select(hw, "", cat)
+	entry, err := Select(hw, "", cat, "linux", "amd64")
 	assert.NoError(t, err)
 	require.NotNil(t, entry)
 	assert.Equal(t, "cuda", entry.Backend)
@@ -336,7 +327,7 @@ func TestSelect_CUDAVersionFallbackToFirst(t *testing.T) {
 
 func TestSelect_PreferVulkan(t *testing.T) {
 	cat := testCatalog()
-	entry, err := Select(nvidiaHW(), "vulkan", cat)
+	entry, err := Select(nvidiaHW(), "vulkan", cat, "linux", "amd64")
 	assert.NoError(t, err)
 	assert.NotNil(t, entry)
 	assert.Equal(t, "vulkan", entry.Backend)
@@ -344,7 +335,7 @@ func TestSelect_PreferVulkan(t *testing.T) {
 
 func TestSelect_PreferCPU(t *testing.T) {
 	cat := testCatalog()
-	entry, err := Select(nvidiaHW(), "cpu", cat)
+	entry, err := Select(nvidiaHW(), "cpu", cat, "darwin", "arm64")
 	assert.NoError(t, err)
 	assert.NotNil(t, entry)
 	assert.Equal(t, "cpu", entry.Backend)
@@ -352,7 +343,7 @@ func TestSelect_PreferCPU(t *testing.T) {
 
 func TestSelect_IntegratedGPU(t *testing.T) {
 	cat := testCatalog()
-	entry, err := Select(integratedGPUHW(), "", cat)
+	entry, err := Select(integratedGPUHW(), "", cat, "linux", "amd64")
 	assert.NoError(t, err)
 	assert.NotNil(t, entry)
 	assert.Equal(t, "vulkan", entry.Backend)
@@ -360,7 +351,7 @@ func TestSelect_IntegratedGPU(t *testing.T) {
 
 func TestSelect_CPUOnly(t *testing.T) {
 	cat := testCatalog()
-	entry, err := Select(cpuOnlyHW(), "", cat)
+	entry, err := Select(cpuOnlyHW(), "", cat, "darwin", "arm64")
 	assert.NoError(t, err)
 	assert.NotNil(t, entry)
 	assert.Equal(t, "cpu", entry.Backend)
@@ -368,14 +359,14 @@ func TestSelect_CPUOnly(t *testing.T) {
 
 func TestSelect_NoCatalog(t *testing.T) {
 	cat := &Catalog{Version: "1", Sources: []Source{}}
-	_, err := Select(nvidiaHW(), "", cat)
+	_, err := Select(nvidiaHW(), "", cat, "linux", "amd64")
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "no compatible runtime found")
 }
 
 func TestSelect_InvalidPreferBackend(t *testing.T) {
 	cat := testCatalog()
-	entry, err := Select(nvidiaHW(), "nonexistent", cat)
+	entry, err := Select(nvidiaHW(), "nonexistent", cat, "linux", "amd64")
 	assert.NoError(t, err)
 	assert.NotNil(t, entry)
 	assert.Equal(t, "cuda", entry.Backend)
@@ -383,7 +374,7 @@ func TestSelect_InvalidPreferBackend(t *testing.T) {
 
 func TestSelect_PopulatesEntryID(t *testing.T) {
 	cat := testCatalog()
-	entry, err := Select(nvidiaHW(), "vulkan", cat)
+	entry, err := Select(nvidiaHW(), "vulkan", cat, "linux", "amd64")
 	assert.NoError(t, err)
 	assert.NotNil(t, entry)
 	assert.NotEmpty(t, entry.ID)
