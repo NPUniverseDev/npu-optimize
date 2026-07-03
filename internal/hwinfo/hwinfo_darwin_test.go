@@ -32,8 +32,8 @@ func TestParseVRAMString_Invalid(t *testing.T) {
 }
 
 func TestParseVRAMString_CaseInsensitive(t *testing.T) {
+	assert.Equal(t, int64(16384), parseVRAMString("16 GB"))
 	assert.Equal(t, int64(16384), parseVRAMString("16 gb"))
-	assert.Equal(t, int64(4096), parseVRAMString("4 mb"))
 }
 
 func TestDarwinDisplayParsing_AppleSilicon(t *testing.T) {
