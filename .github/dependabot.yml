@@ -2,27 +2,39 @@ version: 2
 updates:
   - package-ecosystem: "gomod"
     directory: "/"
+    target-branch: "main"
     schedule:
       interval: "weekly"
       day: "monday"
       time: "00:00"
       timezone: "Europe/Madrid"
+    open-pull-requests-limit: 10
     groups:
-      gomod-minor-patch:
-        applies-to: version-updates
-        update-types:
-          - "minor"
-          - "patch"
+      patch-updates:
+        patterns: ["*"]
+        update-types: ["patch"]
+      minor-updates:
+        patterns: ["*"]
+        update-types: ["minor"]
+      major-updates:
+        patterns: ["*"]
+        update-types: ["major"]
 
   - package-ecosystem: "github-actions"
     directory: "/"
+    target-branch: "main"
     schedule:
       interval: "weekly"
       day: "monday"
       time: "00:00"
       timezone: "Europe/Madrid"
     groups:
-      actions-all:
-        applies-to: version-updates
-        patterns:
-          - "*"
+      patch-updates:
+        patterns: ["*"]
+        update-types: ["patch"]
+      minor-updates:
+        patterns: ["*"]
+        update-types: ["minor"]
+      major-updates:
+        patterns: ["*"]
+        update-types: ["major"]
