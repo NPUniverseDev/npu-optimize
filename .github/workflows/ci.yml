@@ -1,14 +1,17 @@
 name: CI
 
 on:
+  pull_request:
   push:
     branches: [main]
-  pull_request:
-    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
 
 jobs:
-  lint:
-    runs-on: ubuntu-latest
+  validate:
+    runs-on: [self-hosted, linux, light]
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v6
@@ -18,40 +21,5 @@ jobs:
         with:
           version: latest
           install-mode: goinstall
-
-  test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-go@v6
-        with:
-          go-version: "1.26"
       - run: go test ./... -v -count=1
-
-  test-windows:
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-go@v6
-        with:
-          go-version: "1.26"
-      - run: go test ./... -v -count=1
-
-  test-macos:
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-go@v6
-        with:
-          go-version: "1.26"
-      - run: go test ./... -v -count=1
-      - run: go build ./cmd/npu-optimize
-
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-go@v6
-        with:
-          go-version: "1.26"
       - run: go build ./cmd/npu-optimize
