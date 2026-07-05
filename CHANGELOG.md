@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.3.2](https://github.com/NPUniverseDev/npu-optimize/compare/v0.3.1...v0.3.2) (2026-07-05)
+
+
+### Bug Fixes
+
+* add contents:read permission for checkout action ([9a1d15d](https://github.com/NPUniverseDev/npu-optimize/commit/9a1d15d866c57f6a6a245fe1268d3ab035fd7d96))
+* remove invalid package-name input from release-please action ([1c142a1](https://github.com/NPUniverseDev/npu-optimize/commit/1c142a13466f67aea8a079602f161c9066474ccb))
+* simplify dependabot groups for github-actions to single group ([5fde727](https://github.com/NPUniverseDev/npu-optimize/commit/5fde727895e47068e2a4b3571a056f1ce8cfc87e))
+
 ## [0.3.1](https://github.com/Ericson246/npu-optimize/compare/v0.3.0...v0.3.1) (2026-07-03)
 
 
