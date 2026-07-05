@@ -1,0 +1,38 @@
+name: Dependabot Info
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  pull-requests: write
+
+jobs:
+  label-pr:
+    runs-on: [self-hosted, linux, light]
+    if: github.actor == 'dependabot[bot]'
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dependabot/fetch-metadata@v3
+        id: metadata
+
+      - name: Add update type label
+        run: |
+          case "${{ steps.metadata.outputs.update-type }}" in
+            version-update:semver-patch)  LABEL="🟢 patch"; COLOR="0E8A16" ;;
+            version-update:semver-minor)  LABEL="🟡 minor"; COLOR="FBCA04" ;;
+            version-update:semver-major)  LABEL="🔴 major"; COLOR="D93F0B" ;;
+            *)                            LABEL="🔵 update"; COLOR="0075CA" ;;
+          esac
+          gh label create "$LABEL" --color "$COLOR" --force
+          gh pr edit "${{ github.event.pull_request.html_url }}" --add-label "$LABEL"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Add ecosystem label
+        run: |
+          ECOSYSTEM="${{ steps.metadata.outputs.package-ecosystem }}"
+          gh label create "📦 $ECOSYSTEM" --color "BFD4F2" --force
+          gh pr edit "${{ github.event.pull_request.html_url }}" --add-label "📦 $ECOSYSTEM"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
