@@ -11,7 +11,7 @@ concurrency:
 
 jobs:
   validate:
-    runs-on: [self-hosted, linux, light]
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v6
