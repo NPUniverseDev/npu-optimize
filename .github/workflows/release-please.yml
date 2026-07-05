@@ -16,4 +16,3 @@ jobs:
         with:
           token: ${{ secrets.GH_RELEASE_TOKEN }}
           release-type: go
-          package-name: npu-optimize
