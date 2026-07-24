@@ -8,7 +8,7 @@
 
 **npu-optimize** detects your hardware, queries HuggingFace for GGUF models, calculates optimal inference configuration for [llama.cpp](https://github.com/ggml-org/llama.cpp), and optionally runs benchmarks to validate performance.
 
-`detect` is a dry-run and does not download models. Benchmark-oriented commands may download lightweight artifacts to measure real performance.
+`detect` is a dry-run and does not download models. `benchmark` may download `llama-bench` and a lightweight proxy GGUF to measure real performance.
 
 ---
 
@@ -87,6 +87,24 @@ npu-optimize detect [flags]
 | `--vram-margin` | `0` (auto) | VRAM safety margin in MB. 0 = 5% of free VRAM (min 256, max 1024) |
 
 Global Flags also apply (see above).
+
+### `benchmark`
+
+Runs a real proxy benchmark with `llama-bench` and emits schema v4 output. If `llama-bench` is not found in `PATH`, it is resolved from local cache or downloaded automatically for the current OS/arch. A small proxy GGUF is also resolved from cache/download as needed.
+
+`benchmark` uses decode throughput (`tg`) as the estimation basis. Prompt throughput is exposed separately in output telemetry.
+
+```
+npu-optimize benchmark [flags]
+```
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `-m, --mode` | `auto` | Benchmark mode: auto, gpu-only, cpu, partial |
+| `-c, --ctx-size` | `16384` | Minimum required context size |
+| `--vram-margin` | `0` (auto) | VRAM safety margin in MB |
+| `--force` | `false` | Ignore benchmark/proxy cache and run again |
+| `--min-ts` | `8` | Minimum estimated decode tokens/sec required |
 
 ### Verbosity and stage logs
 
@@ -208,7 +226,7 @@ Available subcommands: `bash`, `fish`, `powershell`, `zsh`.
 
 | Channel | Content |
 |---------|---------|
-| stdout  | Success JSON (schema v1/v2/v3) |
+| stdout  | Success JSON (schema v1/v2/v3/v4) |
 | stderr  | Log messages + ErrorOutput JSON on failure |
 
 ### Exit codes
@@ -243,8 +261,11 @@ When a non-zero exit code is returned, stdout contains an error JSON:
 | `1` | v0.1.0 | Minimal output with hardware + inference params |
 | `2` | v0.2.0 | Adds `runtime_recommendation` with backend/version/URL |
 | `3` | v0.3.0 | `backends` as `BackendInfo[]` (name, version, detected_lib). Adds `num_parameters`, `quantization`, `score`, `arch_tier`. Adds `backend_version` in runtime recommendation |
+| `4` | v0.4.0 | Benchmark output: `llama_bench`, `proxy_benchmark`, calibrated throughput estimation, and selection tracing fields |
 
 Use `--output-schema-version` to request a specific version.
+
+Note: `benchmark` currently supports schema v4 only and normalizes requested versions to v4.
 
 ---
 
