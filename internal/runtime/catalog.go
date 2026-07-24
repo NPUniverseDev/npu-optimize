@@ -8,12 +8,20 @@ import (
 	"time"
 )
 
-const catalogURL = "https://Ericson246.github.io/npu-optimize/runtime-catalog.json"
+const defaultRemoteCatalogURL = "https://NPUniverseDev.github.io/npu-optimize/runtime-catalog.json"
 
 func FetchCatalog(url string) (*Catalog, error) {
 	if url == "" {
-		url = catalogURL
+		return LoadEmbeddedCatalog()
 	}
+	return fetchRemoteCatalog(url)
+}
+
+func FetchCatalogRemoteDefault() (*Catalog, error) {
+	return fetchRemoteCatalog(defaultRemoteCatalogURL)
+}
+
+func fetchRemoteCatalog(url string) (*Catalog, error) {
 
 	client := &http.Client{Timeout: 15 * time.Second}
 	resp, err := client.Get(url)
@@ -36,6 +44,11 @@ func FetchCatalog(url string) (*Catalog, error) {
 		return nil, fmt.Errorf("parse catalog: %w", err)
 	}
 
+	normalizeCatalog(&cat)
+	return &cat, nil
+}
+
+func normalizeCatalog(cat *Catalog) {
 	for i := range cat.Sources {
 		for id, entry := range cat.Sources[i].Runtimes {
 			entry.ID = id
@@ -43,6 +56,4 @@ func FetchCatalog(url string) (*Catalog, error) {
 			cat.Sources[i].Runtimes[id] = entry
 		}
 	}
-
-	return &cat, nil
 }

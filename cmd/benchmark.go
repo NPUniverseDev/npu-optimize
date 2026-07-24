@@ -132,7 +132,7 @@ func runBenchmark() error {
 		}
 	}
 
-	catalog, catErr := runtime.FetchCatalog("")
+	catalog, catErr := runtime.FetchCatalog(getRuntimeCatalogURL())
 	if catErr == nil {
 		entry, selErr := runtime.Select(hw, preferBackend, catalog, goruntime.GOOS, goruntime.GOARCH)
 		if selErr == nil && entry != nil {

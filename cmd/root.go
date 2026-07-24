@@ -18,6 +18,7 @@ var (
 	verbose           int
 	llamaBenchVersion string
 	logFormat         string
+	runtimeCatalogURL string
 )
 
 var rootCmd = &cobra.Command{
@@ -51,6 +52,7 @@ func init() {
 	pf.StringVar(&cfgFile, "config", "", "Path to config file")
 	pf.StringVar(&llamaBenchVersion, "llama-bench-version", "b9180", "llama-bench version to use")
 	pf.StringVar(&logFormat, "log-format", "text", "Log format: text or json")
+	pf.StringVar(&runtimeCatalogURL, "runtime-catalog-url", "", "Override runtime catalog URL (empty uses embedded catalog)")
 
 	_ = viper.BindPFlag("token", pf.Lookup("token"))
 	_ = viper.BindPFlag("model_dir", pf.Lookup("model-dir"))
@@ -58,6 +60,7 @@ func init() {
 	_ = viper.BindPFlag("output_schema_version", pf.Lookup("output-schema-version"))
 	_ = viper.BindPFlag("verbose", pf.Lookup("verbose"))
 	_ = viper.BindPFlag("llama_bench_version", pf.Lookup("llama-bench-version"))
+	_ = viper.BindPFlag("runtime_catalog_url", pf.Lookup("runtime-catalog-url"))
 }
 
 func initConfig() {
@@ -95,4 +98,14 @@ func getToken() string {
 		return t
 	}
 	return os.Getenv("NPU_OPTIMIZE_TOKEN")
+}
+
+func getRuntimeCatalogURL() string {
+	if runtimeCatalogURL != "" {
+		return runtimeCatalogURL
+	}
+	if u := os.Getenv("NPU_OPTIMIZE_RUNTIME_CATALOG_URL"); u != "" {
+		return u
+	}
+	return ""
 }

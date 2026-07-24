@@ -65,6 +65,7 @@ Available Commands:
       --model-dir string             Directory for model files (default "./models")
   -o, --output string                Output format: json or text (default "json")
       --output-schema-version int    Requested output schema version (default 1, benchmark uses v4+)
+      --runtime-catalog-url string   Override runtime catalog URL (default embedded catalog)
   -t, --token string                 HuggingFace token (also reads HF_TOKEN, NPU_OPTIMIZE_TOKEN)
   -v, --verbose count                Verbosity level (-v, -vv, -vvv)
 ```
@@ -268,7 +269,7 @@ Use `--output-schema-version` to request a specific version.
 | Metal   | ❌      | ❌    | ✅     | ❌      |
 | CPU     | ✅      | ✅    | ✅     | ✅      |
 
-The [runtime catalog](docs/runtime-catalog.json) is synchronized daily at 04:00 UTC from [ggml-org/llama.cpp](https://github.com/ggml-org/llama.cpp) and [Ericson246/llama.cpp](https://github.com/Ericson246/llama.cpp) (custom builds like Android Vulkan). See [sync-runtimes workflow](.github/workflows/sync-runtimes.yml).
+The [runtime catalog](docs/runtime-catalog.json) is synchronized daily from [ggml-org/llama.cpp](https://github.com/ggml-org/llama.cpp) and [Ericson246/llama.cpp](https://github.com/Ericson246/llama.cpp) (custom builds like Android Vulkan). It is embedded into the binary at build time for deterministic offline behavior; use `--runtime-catalog-url` only when you want to override it explicitly. See [sync-runtimes workflow](.github/workflows/sync-runtimes.yml).
 
 ## Requirements
 

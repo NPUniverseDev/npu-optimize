@@ -60,7 +60,7 @@ func (o *Orchestrator) RunProxy(modelName, modelPath string, cachedProxy bool) (
 				NUBatch:    entry.NUBatch,
 				NThreads:   entry.NThreads,
 				CtxSize:    entry.FitMinCtx,
-				FlashAttn:  entry.FlashAttn,
+				FlashAttn:  entry.FlashAttnBool(),
 				CacheTypeK: entry.TypeK,
 				CacheTypeV: entry.TypeV,
 			},

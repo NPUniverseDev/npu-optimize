@@ -47,6 +47,13 @@ func TestFetchCatalog_Success(t *testing.T) {
 	assert.Equal(t, "test", entry.SourceName)
 }
 
+func TestFetchCatalog_UsesEmbeddedWhenEmptyURL(t *testing.T) {
+	cat, err := FetchCatalog("")
+	require.NoError(t, err)
+	require.NotNil(t, cat)
+	assert.NotEmpty(t, cat.Sources)
+}
+
 func TestFetchCatalog_NotFound(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)

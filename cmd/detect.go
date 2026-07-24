@@ -273,7 +273,7 @@ func runDetect() error {
 		}
 	}
 
-	catalog, catErr := runtime.FetchCatalog("")
+	catalog, catErr := runtime.FetchCatalog(getRuntimeCatalogURL())
 	if catErr != nil {
 		slog.Warn("failed to fetch runtime catalog", "err", catErr)
 	} else {
