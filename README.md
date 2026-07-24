@@ -88,6 +88,14 @@ npu-optimize detect [flags]
 
 Global Flags also apply (see above).
 
+### Verbosity and stage logs
+
+- `stdout` always contains machine-readable JSON output.
+- `stderr` contains logs.
+- Default level shows warnings/errors only.
+- Use `-v` to see stage progress logs (`stage_start` / `stage_done` / `stage_fail`).
+- Use `-vv` or `-vvv` to include debug details such as cache behavior and internal decision points.
+
 #### Mode selection
 
 | Mode | Description |

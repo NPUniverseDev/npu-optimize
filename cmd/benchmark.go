@@ -14,6 +14,7 @@ import (
 	"github.com/Ericson246/npu-optimize/internal/hfclient"
 	"github.com/Ericson246/npu-optimize/internal/hwinfo"
 	"github.com/Ericson246/npu-optimize/internal/llamabench"
+	applog "github.com/Ericson246/npu-optimize/internal/logger"
 	"github.com/Ericson246/npu-optimize/internal/output"
 	"github.com/Ericson246/npu-optimize/internal/recommend"
 	"github.com/Ericson246/npu-optimize/internal/runtime"
@@ -67,13 +68,18 @@ func runBenchmark() error {
 	}
 
 	tok := getToken()
+	stgDetectHW := applog.StartStage("benchmark", "detect_hardware", "mode", bmMode)
 	hw, err := hwinfo.Detect()
 	if err != nil {
+		stgDetectHW.Fail(err)
 		fatal(1, "internal_error", "Hardware detection failed", "err", err)
 	}
+	stgDetectHW.Done()
 
+	stgResolveConfig := applog.StartStage("benchmark", "resolve_mode_and_memory")
 	cfg, err := resolveDetectConfig(bmMode, hw)
 	if err != nil {
+		stgResolveConfig.Fail(err)
 		var hwErr *hwUnsupportedError
 		if errors.As(err, &hwErr) {
 			fatal(3, "hardware_unsupported", hwErr.Error())
@@ -89,11 +95,14 @@ func runBenchmark() error {
 		}
 		effectiveMargin = calcVRAMMargin(vramFree)
 	}
+	stgResolveConfig.Done("mode_used", cfg.modeUsed, "available_memory_mb", cfg.availableMemoryMB, "vram_margin_mb", effectiveMargin)
 
+	stgSchema := applog.StartStage("benchmark", "resolve_schema_version", "requested", outputSchemaVer)
 	osc := normalizeBenchmarkSchemaVersion(outputSchemaVer)
 	if outputSchemaVer != osc {
 		slog.Warn("benchmark supports schema v4 only, using v4", "requested", outputSchemaVer, "used", osc)
 	}
+	stgSchema.Done("used", osc)
 
 	result := output.New(osc)
 	result.ModeUsed = cfg.modeUsed
@@ -132,10 +141,14 @@ func runBenchmark() error {
 		}
 	}
 
+	stgRuntime := applog.StartStage("benchmark", "load_runtime_catalog")
 	catalog, catErr := runtime.FetchCatalog(getRuntimeCatalogURL())
 	if catErr == nil {
+		stgRuntime.Done("sources", len(catalog.Sources))
+		stgRuntimeSelect := applog.StartStage("benchmark", "select_runtime")
 		entry, selErr := runtime.Select(hw, preferBackend, catalog, goruntime.GOOS, goruntime.GOARCH)
 		if selErr == nil && entry != nil {
+			stgRuntimeSelect.Done("backend", entry.Backend, "version", entry.Version)
 			result.RuntimeRecommend = &output.RuntimeRecommend{
 				Backend:        entry.Backend,
 				BackendVersion: entry.BackendVersion,
@@ -146,7 +159,13 @@ func runBenchmark() error {
 				SizeBytes:      entry.SizeBytes,
 				Format:         entry.Format,
 			}
+		} else if selErr != nil {
+			stgRuntimeSelect.Fail(selErr)
+		} else {
+			stgRuntimeSelect.Done("status", "none")
 		}
+	} else {
+		stgRuntime.Fail(catErr)
 	}
 
 	homeDir, err := os.UserHomeDir()
@@ -154,17 +173,23 @@ func runBenchmark() error {
 		fatal(1, "internal_error", "Cannot resolve user home directory", "err", err)
 	}
 
+	stgResolveBench := applog.StartStage("benchmark", "resolve_llama_bench")
 	acq := llamabench.NewAcquirer(filepath.Join(homeDir, constants.CacheDir, "bin"))
 	benchPath, err := acq.Resolve("")
 	if err != nil {
+		stgResolveBench.Fail(err)
 		fatal(1, "internal_error", "Unable to resolve llama-bench binary", "err", err)
 	}
+	stgResolveBench.Done("path", benchPath)
 
+	stgResolveProxy := applog.StartStage("benchmark", "resolve_proxy_model")
 	proxyResolver := &benchflow.ProxyResolver{CacheDir: filepath.Join(homeDir, constants.CacheDir, "proxy")}
 	proxy, proxyPath, proxyCached, err := proxyResolver.Resolve(benchForce)
 	if err != nil {
+		stgResolveProxy.Fail(err)
 		fatal(1, "internal_error", "Unable to resolve proxy model", "err", err)
 	}
+	stgResolveProxy.Done("model", proxy.File, "proxy_cached", proxyCached)
 
 	benchCache := cache.New(filepath.Join(homeDir, constants.CacheDir))
 	orch := &benchflow.Orchestrator{
@@ -175,10 +200,18 @@ func runBenchmark() error {
 		Fingerprint: fingerprint,
 	}
 
+	stgRunProxyBench := applog.StartStage("benchmark", "run_proxy_benchmark")
 	proxyBench, err := orch.RunProxy(proxy.File, proxyPath, proxyCached)
 	if err != nil {
+		stgRunProxyBench.Fail(err)
 		fatal(1, "internal_error", "Proxy benchmark failed", "err", err)
 	}
+	stgRunProxyBench.Done(
+		"benchmark_cached", proxyBench.ProxyBenchmark.BenchmarkCached,
+		"ts_proxy", proxyBench.ProxyBenchmark.TSProxy,
+		"ts_max_proxy", proxyBench.ProxyBenchmark.TSMaxProxy,
+		"effective_bandwidth_gbs", proxyBench.ProxyBenchmark.EffectiveBandwidthGBs,
+	)
 
 	result.LlamaBench = &output.LlamaBench{
 		Version: proxyBench.LlamaBench.Version,
@@ -215,20 +248,26 @@ func runBenchmark() error {
 		AvailableMemoryMB: cfg.availableMemoryMB,
 	})
 
+	stgRecommend := applog.StartStage("benchmark", "recommend_model")
 	rec, err := svc.Recommend(hw)
 	if err != nil {
+		stgRecommend.Fail(err)
 		var authErr *hfclient.AuthError
 		if errors.As(err, &authErr) {
 			fatal(4, "auth_required", authErr.Error())
 		}
 		fatal(1, "internal_error", fmt.Sprintf("Recommendation failed: %v", err))
 	}
+	stgRecommend.Done("repo", rec.Repo, "file", rec.File)
 
 	if rec.Repo == "" {
 		result.Viable = false
+		stgEmitNoViable := applog.StartStage("benchmark", "emit_output", "version", result.Version)
 		if encErr := output.Encode(os.Stdout, result); encErr != nil {
+			stgEmitNoViable.Fail(encErr)
 			fatal(1, "internal_error", "Failed to encode output", "err", encErr)
 		}
+		stgEmitNoViable.Done("viable", false)
 		os.Exit(2)
 	}
 
@@ -237,10 +276,14 @@ func runBenchmark() error {
 	}
 
 	if rec.VRAMResult != nil {
+		stgEstimate := applog.StartStage("benchmark", "estimate_ts")
 		bytesPerToken := benchflow.BytesPerToken(rec.SizeBytes, bmCtxSize, rec.VRAMResult.KVcacheBytes)
 		ts, tsErr := benchflow.EstimateTSFromBandwidth(proxyBench.ProxyBenchmark.EffectiveBandwidthGBs, bytesPerToken)
 		if tsErr == nil {
 			rec.VRAMResult.TSEstimated = &ts
+			stgEstimate.Done("ts_estimated", ts)
+		} else {
+			stgEstimate.Fail(tsErr)
 		}
 	}
 
@@ -293,6 +336,12 @@ func runBenchmark() error {
 		viable = viable && *rec.VRAMResult.TSEstimated >= benchMinTS
 	}
 	result.Viable = viable
+	stgEvaluate := applog.StartStage("benchmark", "evaluate_viability")
+	if rec.VRAMResult != nil && rec.VRAMResult.TSEstimated != nil {
+		stgEvaluate.Done("fits_in_vram", rec.FitsInVRAM, "ts_estimated", *rec.VRAMResult.TSEstimated, "min_ts", benchMinTS, "viable", viable)
+	} else {
+		stgEvaluate.Done("fits_in_vram", rec.FitsInVRAM, "min_ts", benchMinTS, "viable", viable)
+	}
 
 	for _, fb := range rec.Fallbacks {
 		result.Fallbacks = append(result.Fallbacks, output.FallbackEntry{
@@ -304,9 +353,12 @@ func runBenchmark() error {
 		})
 	}
 
+	stgEmit := applog.StartStage("benchmark", "emit_output", "version", result.Version)
 	if encErr := output.Encode(os.Stdout, result); encErr != nil {
+		stgEmit.Fail(encErr)
 		fatal(1, "internal_error", "Failed to encode output", "err", encErr)
 	}
+	stgEmit.Done("viable", result.Viable)
 
 	if !result.Viable {
 		os.Exit(2)

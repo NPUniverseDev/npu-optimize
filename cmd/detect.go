@@ -12,6 +12,7 @@ import (
 	"github.com/Ericson246/npu-optimize/internal/constants"
 	"github.com/Ericson246/npu-optimize/internal/hfclient"
 	"github.com/Ericson246/npu-optimize/internal/hwinfo"
+	applog "github.com/Ericson246/npu-optimize/internal/logger"
 	"github.com/Ericson246/npu-optimize/internal/output"
 	"github.com/Ericson246/npu-optimize/internal/recommend"
 	"github.com/Ericson246/npu-optimize/internal/runtime"
@@ -178,10 +179,13 @@ func runDetect() error {
 		"mode", mode,
 	)
 
+	stgDetectHW := applog.StartStage("detect", "detect_hardware", "mode", mode)
 	hw, err := hwinfo.Detect()
 	if err != nil {
+		stgDetectHW.Fail(err)
 		fatal(1, "internal_error", "Hardware detection failed", "err", err)
 	}
+	stgDetectHW.Done()
 
 	gpuInfo := "none"
 	if hw.GPU != nil {
@@ -195,8 +199,10 @@ func runDetect() error {
 		"ram_total_mb", hw.RAMTotalMB,
 	)
 
+	stgResolveConfig := applog.StartStage("detect", "resolve_mode_and_memory")
 	cfg, err := resolveDetectConfig(mode, hw)
 	if err != nil {
+		stgResolveConfig.Fail(err)
 		var hwErr *hwUnsupportedError
 		if errors.As(err, &hwErr) {
 			fatal(3, "hardware_unsupported", hwErr.Error())
@@ -212,6 +218,7 @@ func runDetect() error {
 		}
 		effectiveMargin = calcVRAMMargin(vramFree)
 	}
+	stgResolveConfig.Done("mode_used", cfg.modeUsed, "available_memory_mb", cfg.availableMemoryMB, "vram_margin_mb", effectiveMargin)
 
 	slog.Info("detect config",
 		"mode", cfg.modeUsed,
@@ -221,6 +228,7 @@ func runDetect() error {
 		"n_batch", cfg.nBatch,
 	)
 
+	stgSchema := applog.StartStage("detect", "resolve_schema_version", "requested", outputSchemaVer)
 	osc := outputSchemaVer
 	if osc < 1 {
 		osc = 1
@@ -230,6 +238,7 @@ func runDetect() error {
 			"requested", osc, "used", 3)
 		osc = 3
 	}
+	stgSchema.Done("used", osc)
 
 	result := output.New(osc)
 	result.ModeUsed = cfg.modeUsed
@@ -273,14 +282,20 @@ func runDetect() error {
 		}
 	}
 
+	stgRuntime := applog.StartStage("detect", "load_runtime_catalog")
 	catalog, catErr := runtime.FetchCatalog(getRuntimeCatalogURL())
 	if catErr != nil {
+		stgRuntime.Fail(catErr)
 		slog.Warn("failed to fetch runtime catalog", "err", catErr)
 	} else {
+		stgRuntime.Done("sources", len(catalog.Sources))
+		stgRuntimeSelect := applog.StartStage("detect", "select_runtime")
 		entry, selErr := runtime.Select(hw, preferBackend, catalog, goruntime.GOOS, goruntime.GOARCH)
 		if selErr != nil {
+			stgRuntimeSelect.Fail(selErr)
 			slog.Warn("runtime selection failed", "err", selErr)
 		} else if entry != nil {
+			stgRuntimeSelect.Done("backend", entry.Backend, "version", entry.Version)
 			ver := entry.Version
 			slog.Info("runtime selected",
 				"backend", entry.Backend,
@@ -299,6 +314,8 @@ func runDetect() error {
 				SizeBytes:      entry.SizeBytes,
 				Format:         entry.Format,
 			}
+		} else {
+			stgRuntimeSelect.Done("status", "none")
 		}
 	}
 
@@ -314,21 +331,27 @@ func runDetect() error {
 		AvailableMemoryMB: cfg.availableMemoryMB,
 	})
 
+	stgRecommend := applog.StartStage("detect", "recommend_model")
 	rec, err := svc.Recommend(hw)
 	if err != nil {
+		stgRecommend.Fail(err)
 		var authErr *hfclient.AuthError
 		if errors.As(err, &authErr) {
 			fatal(4, "auth_required", authErr.Error())
 		}
 		fatal(1, "internal_error", fmt.Sprintf("Recommendation failed: %v", err))
 	}
+	stgRecommend.Done("repo", rec.Repo, "file", rec.File)
 
 	if rec.Repo == "" {
 		slog.Info("no compatible model found")
 		result.Viable = false
+		stgEmitNoViable := applog.StartStage("detect", "emit_output", "version", result.Version)
 		if encErr := output.Encode(os.Stdout, result); encErr != nil {
+			stgEmitNoViable.Fail(encErr)
 			fatal(1, "internal_error", "Failed to encode output", "err", encErr)
 		}
+		stgEmitNoViable.Done("viable", false)
 		os.Exit(2)
 	}
 
@@ -404,9 +427,12 @@ func runDetect() error {
 		})
 	}
 
+	stgEmit := applog.StartStage("detect", "emit_output", "version", result.Version)
 	if encErr := output.Encode(os.Stdout, result); encErr != nil {
+		stgEmit.Fail(encErr)
 		fatal(1, "internal_error", "Failed to encode output", "err", encErr)
 	}
+	stgEmit.Done("viable", result.Viable)
 
 	if !rec.FitsInVRAM {
 		os.Exit(2)
