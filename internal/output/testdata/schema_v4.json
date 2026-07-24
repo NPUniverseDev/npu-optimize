@@ -40,6 +40,7 @@
   },
   "proxy_benchmark": {
     "model": "Qwen3-0.6B-Q4_K_M.gguf",
+    "model_size_bytes": 396705472,
     "effective_bandwidth_gbs": 80.5,
     "fit_config": {
       "n_gpu_layers": 30,
@@ -52,7 +53,9 @@
       "cache_type_v": "q8_0"
     },
     "ts_proxy": 80.2,
-    "cached": false
+    "ts_max_proxy": 83.1,
+    "proxy_cached": false,
+    "benchmark_cached": false
   },
   "recommended": {
     "repo": "test/repo",

@@ -31,7 +31,8 @@ func (o *Orchestrator) RunProxy(modelName, modelPath string, cachedProxy bool) (
 		if b, ok := o.Cache.Get(cacheKey); ok {
 			var out Result
 			if err := json.Unmarshal(b, &out); err == nil {
-				out.ProxyBenchmark.Cached = true
+				out.ProxyBenchmark.BenchmarkCached = true
+				out.ProxyBenchmark.ProxyCached = true
 				return &out, nil
 			}
 		}
@@ -51,6 +52,7 @@ func (o *Orchestrator) RunProxy(modelName, modelPath string, cachedProxy bool) (
 		},
 		ProxyBenchmark: ProxyBenchmark{
 			Model:                 modelName,
+			ModelSizeBytes:        entry.ModelSize,
 			EffectiveBandwidthGBs: bw,
 			FitConfig: FitConfig{
 				NGPULayers: entry.NGPULayers,
@@ -62,8 +64,10 @@ func (o *Orchestrator) RunProxy(modelName, modelPath string, cachedProxy bool) (
 				CacheTypeK: entry.TypeK,
 				CacheTypeV: entry.TypeV,
 			},
-			TSProxy: entry.AvgTS,
-			Cached:  cachedProxy,
+			TSProxy:         entry.AvgTS,
+			TSMaxProxy:      maxSample(entry.SamplesTS, entry.AvgTS),
+			ProxyCached:     cachedProxy,
+			BenchmarkCached: false,
 		},
 		GeneratedAt: time.Now().UTC(),
 	}
@@ -77,4 +81,20 @@ func (o *Orchestrator) RunProxy(modelName, modelPath string, cachedProxy bool) (
 	}
 
 	return out, nil
+}
+
+func maxSample(samples []float64, fallback float64) float64 {
+	if len(samples) == 0 {
+		return fallback
+	}
+	m := samples[0]
+	for _, v := range samples[1:] {
+		if v > m {
+			m = v
+		}
+	}
+	if m <= 0 {
+		return fallback
+	}
+	return m
 }

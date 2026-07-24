@@ -21,8 +21,11 @@ import (
 )
 
 var (
-	benchForce bool
-	benchMinTS float64
+	benchmarkMode       string
+	benchmarkCtxSize    int
+	benchmarkVRAMMargin int
+	benchForce          bool
+	benchMinTS          float64
 )
 
 var benchmarkCmd = &cobra.Command{
@@ -39,23 +42,26 @@ func init() {
 	rootCmd.AddCommand(benchmarkCmd)
 
 	b := benchmarkCmd.Flags()
+	b.StringVarP(&benchmarkMode, "mode", "m", "auto", "Benchmark mode: auto, gpu-only, cpu, partial")
+	b.IntVarP(&benchmarkCtxSize, "ctx-size", "c", constants.DefaultCtxSize, "Minimum required context size")
+	b.IntVar(&benchmarkVRAMMargin, "vram-margin", constants.DefaultVRAMMargin, "VRAM safety margin in MB")
 	b.BoolVar(&benchForce, "force", false, "Ignore benchmark/proxy cache and run everything again")
 	b.Float64Var(&benchMinTS, "min-ts", constants.DefaultMinTS, "Minimum estimated tokens/sec required")
 }
 
 func normalizeBenchmarkSchemaVersion(v int) int {
-	if v < 4 {
+	if v != 4 {
 		return 4
 	}
-	return v
+	return 4
 }
 
 func runBenchmark() error {
-	bmMode := mode
+	bmMode := benchmarkMode
 	if bmMode == "" {
 		bmMode = "auto"
 	}
-	bmCtxSize := ctxSize
+	bmCtxSize := benchmarkCtxSize
 	if bmCtxSize <= 0 {
 		bmCtxSize = constants.DefaultCtxSize
 	}
@@ -75,7 +81,7 @@ func runBenchmark() error {
 		fatal(3, "hardware_unsupported", err.Error())
 	}
 
-	effectiveMargin := vramMargin
+	effectiveMargin := benchmarkVRAMMargin
 	if effectiveMargin == 0 {
 		vramFree := int64(0)
 		if hw.GPU != nil {
@@ -86,7 +92,7 @@ func runBenchmark() error {
 
 	osc := normalizeBenchmarkSchemaVersion(outputSchemaVer)
 	if outputSchemaVer != osc {
-		slog.Warn("benchmark requires schema v4 or newer, using v4", "requested", outputSchemaVer, "used", osc)
+		slog.Warn("benchmark supports schema v4 only, using v4", "requested", outputSchemaVer, "used", osc)
 	}
 
 	result := output.New(osc)
@@ -181,6 +187,7 @@ func runBenchmark() error {
 	}
 	result.ProxyBenchmark = &output.ProxyBenchmark{
 		Model:                 proxyBench.ProxyBenchmark.Model,
+		ModelSizeBytes:        proxyBench.ProxyBenchmark.ModelSizeBytes,
 		EffectiveBandwidthGBs: proxyBench.ProxyBenchmark.EffectiveBandwidthGBs,
 		FitConfig: output.ProxyFitConfig{
 			NGPULayers: proxyBench.ProxyBenchmark.FitConfig.NGPULayers,
@@ -192,8 +199,10 @@ func runBenchmark() error {
 			CacheTypeK: proxyBench.ProxyBenchmark.FitConfig.CacheTypeK,
 			CacheTypeV: proxyBench.ProxyBenchmark.FitConfig.CacheTypeV,
 		},
-		TSProxy: proxyBench.ProxyBenchmark.TSProxy,
-		Cached:  proxyBench.ProxyBenchmark.Cached,
+		TSProxy:         proxyBench.ProxyBenchmark.TSProxy,
+		TSMaxProxy:      proxyBench.ProxyBenchmark.TSMaxProxy,
+		ProxyCached:     proxyBench.ProxyBenchmark.ProxyCached,
+		BenchmarkCached: proxyBench.ProxyBenchmark.BenchmarkCached,
 	}
 
 	client := hfclient.NewClient(tok)
@@ -221,6 +230,10 @@ func runBenchmark() error {
 			fatal(1, "internal_error", "Failed to encode output", "err", encErr)
 		}
 		os.Exit(2)
+	}
+
+	if rec.Header == nil || rec.VRAMResult == nil {
+		fatal(1, "internal_error", "Recommendation data incomplete for benchmark output")
 	}
 
 	if rec.VRAMResult != nil {

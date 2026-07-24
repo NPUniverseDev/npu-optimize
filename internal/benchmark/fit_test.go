@@ -12,7 +12,7 @@ import (
 type fakeBenchRunner struct{}
 
 func (f fakeBenchRunner) Run(_ context.Context, _ string, _ []string) ([]byte, []byte, error) {
-	return []byte(`[{"build_commit":"b9180","model_size":396705472,"n_batch":512,"n_ubatch":128,"n_threads":8,"n_gpu_layers":30,"flash_attn":true,"fit_min_ctx":4096,"type_k":"q8_0","type_v":"q8_0","avg_ts":12.5}]`), nil, nil
+	return []byte(`[{"build_commit":"b9180","model_size":396705472,"n_batch":512,"n_ubatch":128,"n_threads":8,"n_gpu_layers":30,"flash_attn":true,"fit_min_ctx":4096,"type_k":"q8_0","type_v":"q8_0","avg_ts":12.5,"samples_ts":[12.0,13.0,12.5]}]`), nil, nil
 }
 
 func TestOrchestratorRunProxy(t *testing.T) {
@@ -23,9 +23,13 @@ func TestOrchestratorRunProxy(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "b9180", out.LlamaBench.Version)
 	assert.InDelta(t, (396705472.0*12.5)/1e9, out.ProxyBenchmark.EffectiveBandwidthGBs, 0.0001)
-	assert.False(t, out.ProxyBenchmark.Cached)
+	assert.Equal(t, int64(396705472), out.ProxyBenchmark.ModelSizeBytes)
+	assert.False(t, out.ProxyBenchmark.BenchmarkCached)
+	assert.False(t, out.ProxyBenchmark.ProxyCached)
+	assert.InDelta(t, 13.0, out.ProxyBenchmark.TSMaxProxy, 0.0001)
 
 	out2, err := o.RunProxy("proxy", "proxy.gguf", false)
 	require.NoError(t, err)
-	assert.True(t, out2.ProxyBenchmark.Cached)
+	assert.True(t, out2.ProxyBenchmark.BenchmarkCached)
+	assert.True(t, out2.ProxyBenchmark.ProxyCached)
 }

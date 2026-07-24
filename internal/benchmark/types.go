@@ -21,10 +21,13 @@ type FitConfig struct {
 
 type ProxyBenchmark struct {
 	Model                 string    `json:"model"`
+	ModelSizeBytes        int64     `json:"model_size_bytes"`
 	EffectiveBandwidthGBs float64   `json:"effective_bandwidth_gbs"`
 	FitConfig             FitConfig `json:"fit_config"`
 	TSProxy               float64   `json:"ts_proxy"`
-	Cached                bool      `json:"cached"`
+	TSMaxProxy            float64   `json:"ts_max_proxy"`
+	ProxyCached           bool      `json:"proxy_cached"`
+	BenchmarkCached       bool      `json:"benchmark_cached"`
 }
 
 type Result struct {

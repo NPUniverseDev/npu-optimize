@@ -13,13 +13,51 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version: "1.26"
-      - name: Install llama.cpp tools
+      - name: Resolve llama-bench asset URL
+        id: bench
         run: |
-          sudo apt-get update
-          sudo apt-get install -y llama.cpp
+          python - <<'PY'
+          import json
+          import urllib.request
+
+          version = "b9180"
+          url = f"https://api.github.com/repos/ggml-org/llama.cpp/releases/tags/{version}"
+          data = json.loads(urllib.request.urlopen(url).read().decode())
+          assets = data.get("assets", [])
+          candidates = []
+          for a in assets:
+              name = a.get("name", "").lower()
+              if ("linux" in name) and ("x64" in name or "amd64" in name) and (name.endswith(".zip") or name.endswith(".tar.gz") or name.endswith(".tgz")):
+                  candidates.append(a.get("browser_download_url"))
+          if not candidates:
+              raise SystemExit("No suitable llama.cpp release asset for linux x64")
+          with open("asset_url.txt", "w", encoding="utf-8") as f:
+              f.write(candidates[0])
+          print(candidates[0])
+          PY
+          echo "asset_url=$(cat asset_url.txt)" >> "$GITHUB_OUTPUT"
+      - name: Download and extract llama-bench
+        run: |
+          mkdir -p /tmp/bench
+          curl -fL "${{ steps.bench.outputs.asset_url }}" -o /tmp/bench/llama.tar.gz
+          if [[ "${{ steps.bench.outputs.asset_url }}" == *.zip ]]; then
+            sudo apt-get update && sudo apt-get install -y unzip
+            unzip -o /tmp/bench/llama.tar.gz -d /tmp/bench
+          else
+            tar -xzf /tmp/bench/llama.tar.gz -C /tmp/bench
+          fi
+          BENCH_PATH=$(find /tmp/bench -type f -name 'llama-bench' | head -n 1)
+          if [[ -z "$BENCH_PATH" ]]; then
+            echo "llama-bench not found in extracted asset" >&2
+            exit 1
+          fi
+          chmod +x "$BENCH_PATH"
+          echo "NPU_OPTIMIZE_LLAMA_BENCH=$BENCH_PATH" >> "$GITHUB_ENV"
+      - name: Download proxy model
+        run: |
+          mkdir -p /tmp/proxy
+          curl -fL "https://huggingface.co/unsloth/Qwen3-0.6B-GGUF/resolve/main/Qwen3-0.6B-Q4_K_M.gguf" -o /tmp/proxy/proxy.gguf
+          echo "NPU_OPTIMIZE_PROXY_MODEL=/tmp/proxy/proxy.gguf" >> "$GITHUB_ENV"
       - name: Run integration tests
-        env:
-          NPU_OPTIMIZE_LLAMA_BENCH: /usr/bin/llama-bench
         run: |
-          echo "Skipping proxy download in CI by default; set NPU_OPTIMIZE_PROXY_MODEL to enable full run"
           go test -tags=integration ./internal/llamabench -v -count=1

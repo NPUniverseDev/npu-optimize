@@ -10,6 +10,11 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestPickAsset_NoMatch(t *testing.T) {
+	_, err := pickAsset([]releaseAsset{{Name: "foo.txt", BrowserDownloadURL: "https://example.com/foo.txt"}})
+	assert.Error(t, err)
+}
+
 func TestResolve_ExplicitPath(t *testing.T) {
 	dir := t.TempDir()
 	name := "llama-bench"

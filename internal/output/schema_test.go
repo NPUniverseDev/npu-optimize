@@ -192,6 +192,7 @@ func testOutput(ver int, withRuntime bool, withBackendVersion string) *Output {
 		}
 		o.ProxyBenchmark = &ProxyBenchmark{
 			Model:                 "Qwen3-0.6B-Q4_K_M.gguf",
+			ModelSizeBytes:        396705472,
 			EffectiveBandwidthGBs: 80.5,
 			FitConfig: ProxyFitConfig{
 				NGPULayers: 30,
@@ -203,8 +204,10 @@ func testOutput(ver int, withRuntime bool, withBackendVersion string) *Output {
 				CacheTypeK: "q8_0",
 				CacheTypeV: "q8_0",
 			},
-			TSProxy: 80.2,
-			Cached:  false,
+			TSProxy:         80.2,
+			TSMaxProxy:      83.1,
+			ProxyCached:     false,
+			BenchmarkCached: false,
 		}
 		o.Recommended.ExtrapolationMethod = "bandwidth_scaling_v1"
 	}

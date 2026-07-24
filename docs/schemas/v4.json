@@ -27,6 +27,7 @@
       "type": "object",
       "properties": {
         "model": { "type": "string" },
+        "model_size_bytes": { "type": "integer" },
         "effective_bandwidth_gbs": { "type": "number" },
         "fit_config": {
           "type": "object",
@@ -43,9 +44,11 @@
           "required": ["n_gpu_layers", "n_batch", "n_ubatch", "n_threads", "ctx_size", "flash_attn", "cache_type_k", "cache_type_v"]
         },
         "ts_proxy": { "type": "number" },
-        "cached": { "type": "boolean" }
+        "ts_max_proxy": { "type": "number" },
+        "proxy_cached": { "type": "boolean" },
+        "benchmark_cached": { "type": "boolean" }
       },
-      "required": ["model", "effective_bandwidth_gbs", "fit_config", "ts_proxy", "cached"]
+      "required": ["model", "model_size_bytes", "effective_bandwidth_gbs", "fit_config", "ts_proxy", "ts_max_proxy", "proxy_cached", "benchmark_cached"]
     },
     "recommended": {
       "allOf": [
@@ -60,7 +63,8 @@
     },
     "inference_params": { "$ref": "v3.json#/properties/inference_params" },
     "backend_params": { "$ref": "v3.json#/properties/backend_params" },
-    "fallbacks": { "$ref": "v3.json#/properties/fallbacks" }
+    "fallbacks": { "$ref": "v3.json#/properties/fallbacks" },
+    "error": { "$ref": "v3.json#/properties/error" }
   },
   "required": ["$schema", "version", "generated_at", "tool_version", "backend", "mode_used", "viable", "hardware_fingerprint", "hardware"],
   "oneOf": [

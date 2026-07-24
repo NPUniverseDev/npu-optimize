@@ -57,7 +57,7 @@ func (b *Backend) Fit(modelPath string) (*backend.FitResult, error) {
 	fit := res.ProxyBenchmark.FitConfig
 	return &backend.FitResult{
 		BuildCommit:  res.LlamaBench.Version,
-		ModelSize:    0,
+		ModelSize:    res.ProxyBenchmark.ModelSizeBytes,
 		NGPULayers:   fit.NGPULayers,
 		NBatch:       fit.NBatch,
 		NUBatch:      fit.NUBatch,
@@ -67,6 +67,7 @@ func (b *Backend) Fit(modelPath string) (*backend.FitResult, error) {
 		CacheTypeK:   fit.CacheTypeK,
 		CacheTypeV:   fit.CacheTypeV,
 		AvgTS:        res.ProxyBenchmark.TSProxy,
+		MaxTS:        res.ProxyBenchmark.TSMaxProxy,
 		BandwidthGBs: res.ProxyBenchmark.EffectiveBandwidthGBs,
 	}, nil
 }
