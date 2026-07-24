@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.4.0](https://github.com/NPUniverseDev/npu-optimize/compare/v0.3.2...v0.4.0) (2026-07-24)
+
+
+### Features
+
+* add stage-based progress logging ([bcb3d9d](https://github.com/NPUniverseDev/npu-optimize/commit/bcb3d9d253a6adbad34f6f0b57f720ca42eaf8bd))
+* **benchmark:** add calibrated selection loop and schema v4 tracing ([46bdd5b](https://github.com/NPUniverseDev/npu-optimize/commit/46bdd5bc2aa114a2ab1b1c4a43567d7b2526b31b))
+* **benchmark:** use decode-based proxy metrics for ts calibration ([81df969](https://github.com/NPUniverseDev/npu-optimize/commit/81df9691eb990b3fcdf257a83e9459e77ef287bc))
+* implement benchmark pipeline and schema v4 ([0943157](https://github.com/NPUniverseDev/npu-optimize/commit/09431572b4c7a145216dea705eba596bb9906142))
+
+
+### Bug Fixes
+
+* embed runtime catalog and support numeric flash_attn ([3550aa6](https://github.com/NPUniverseDev/npu-optimize/commit/3550aa6d4c4ee3a9c15edce9c2dc7941e8de9587))
+* harden benchmark flow and acquisition ([5bd75af](https://github.com/NPUniverseDev/npu-optimize/commit/5bd75afd8c79e833eebd2d1fa17d03eb73500f70))
+* **lint:** handle Close return values for errcheck ([759f1b7](https://github.com/NPUniverseDev/npu-optimize/commit/759f1b7574ce57d1e70b76d48068e08b6ad84bb3))
+
 ## [0.3.2](https://github.com/NPUniverseDev/npu-optimize/compare/v0.3.1...v0.3.2) (2026-07-05)
 
 
