@@ -44,6 +44,7 @@ func (b *BoolLike) UnmarshalJSON(data []byte) error {
 
 type Entry struct {
 	BuildCommit  string    `json:"build_commit"`
+	BuildNumber  int       `json:"build_number"`
 	ModelSize    int64     `json:"model_size"`
 	ModelNParams int64     `json:"model_n_params"`
 	NBatch       int       `json:"n_batch"`
@@ -56,6 +57,8 @@ type Entry struct {
 	FlashAttn    BoolLike  `json:"flash_attn"`
 	FitTarget    int       `json:"fit_target"`
 	FitMinCtx    int       `json:"fit_min_ctx"`
+	NPrompt      int       `json:"n_prompt"`
+	NGen         int       `json:"n_gen"`
 	AvgTS        float64   `json:"avg_ts"`
 	StddevTS     float64   `json:"stddev_ts"`
 	SamplesNS    []float64 `json:"samples_ns"`

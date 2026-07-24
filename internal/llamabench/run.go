@@ -64,6 +64,15 @@ func BuildArgs(c FitConfig) []string {
 }
 
 func RunFit(r Runner, binaryPath string, cfg FitConfig) (*Entry, error) {
+	entries, err := RunFitAll(r, binaryPath, cfg)
+	if err != nil {
+		return nil, err
+	}
+	first := entries[0]
+	return &first, nil
+}
+
+func RunFitAll(r Runner, binaryPath string, cfg FitConfig) ([]Entry, error) {
 	t := cfg.Timeout
 	if t <= 0 {
 		t = 2 * time.Minute
@@ -85,6 +94,5 @@ func RunFit(r Runner, binaryPath string, cfg FitConfig) (*Entry, error) {
 	if err != nil {
 		return nil, err
 	}
-	first := entries[0]
-	return &first, nil
+	return entries, nil
 }
