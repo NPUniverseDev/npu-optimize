@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://Ericson246.github.io/npu-optimize/schemas/v4.json",
+  "title": "npu-optimize Output Schema v4",
+  "type": "object",
+  "properties": {
+    "$schema": { "type": "string" },
+    "version": { "type": "integer", "const": 4 },
+    "generated_at": { "type": "string", "format": "date-time" },
+    "tool_version": { "type": "string" },
+    "backend": { "type": "string", "const": "llama.cpp" },
+    "mode_used": { "type": "string", "enum": ["auto", "gpu-only", "cpu", "partial"] },
+    "viable": { "type": "boolean" },
+    "hardware_fingerprint": { "type": "string" },
+    "hardware": { "$ref": "v3.json#/properties/hardware" },
+    "runtime_recommendation": { "$ref": "v3.json#/properties/runtime_recommendation" },
+    "llama_bench": {
+      "type": "object",
+      "properties": {
+        "version": { "type": "string" },
+        "source": { "type": "string" },
+        "path": { "type": "string" }
+      },
+      "required": ["version", "source", "path"]
+    },
+    "proxy_benchmark": {
+      "type": "object",
+      "properties": {
+        "model": { "type": "string" },
+        "effective_bandwidth_gbs": { "type": "number" },
+        "fit_config": {
+          "type": "object",
+          "properties": {
+            "n_gpu_layers": { "type": "integer" },
+            "n_batch": { "type": "integer" },
+            "n_ubatch": { "type": "integer" },
+            "n_threads": { "type": "integer" },
+            "ctx_size": { "type": "integer" },
+            "flash_attn": { "type": "boolean" },
+            "cache_type_k": { "type": "string" },
+            "cache_type_v": { "type": "string" }
+          },
+          "required": ["n_gpu_layers", "n_batch", "n_ubatch", "n_threads", "ctx_size", "flash_attn", "cache_type_k", "cache_type_v"]
+        },
+        "ts_proxy": { "type": "number" },
+        "cached": { "type": "boolean" }
+      },
+      "required": ["model", "effective_bandwidth_gbs", "fit_config", "ts_proxy", "cached"]
+    },
+    "recommended": {
+      "allOf": [
+        { "$ref": "v3.json#/properties/recommended" },
+        {
+          "type": "object",
+          "properties": {
+            "extrapolation_method": { "type": "string" }
+          }
+        }
+      ]
+    },
+    "inference_params": { "$ref": "v3.json#/properties/inference_params" },
+    "backend_params": { "$ref": "v3.json#/properties/backend_params" },
+    "fallbacks": { "$ref": "v3.json#/properties/fallbacks" }
+  },
+  "required": ["$schema", "version", "generated_at", "tool_version", "backend", "mode_used", "viable", "hardware_fingerprint", "hardware"],
+  "oneOf": [
+    { "required": ["recommended", "inference_params", "backend_params"] },
+    { "required": ["error"] }
+  ]
+}

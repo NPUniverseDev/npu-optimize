@@ -1,7 +1,7 @@
 # ADR-002: Benchmark, Extrapolation and Optimization
 
 **Date:** 2026-06-14 (v2)
-**Status:** Accepted
+**Status:** Accepted (implementation specifics partially superseded by ADR-008)
 **Repo:** `github.com/Ericson246/npu-optimize`
 
 ## Context

@@ -8,7 +8,7 @@
 
 **npu-optimize** detects your hardware, queries HuggingFace for GGUF models, calculates optimal inference configuration for [llama.cpp](https://github.com/ggml-org/llama.cpp), and optionally runs benchmarks to validate performance.
 
-No models are downloaded — it's a dry-run that tells you what would work best on your machine.
+`detect` is a dry-run and does not download models. Benchmark-oriented commands may download lightweight artifacts to measure real performance.
 
 ---
 
@@ -53,6 +53,7 @@ Available Commands:
 |---------|-------------|
 | `completion` | Generate the autocompletion script for the specified shell |
 | `detect` | Detect hardware and recommend a model (dry-run, no downloads) |
+| `benchmark` | Run proxy benchmark and extrapolate real-world recommendation |
 | `help` | Help about any command |
 
 ### Global Flags
@@ -63,7 +64,7 @@ Available Commands:
       --log-format string            Log format: text or json (default "text")
       --model-dir string             Directory for model files (default "./models")
   -o, --output string                Output format: json or text (default "json")
-      --output-schema-version int    Requested output schema version (default 1)
+      --output-schema-version int    Requested output schema version (default 1, benchmark uses v4+)
   -t, --token string                 HuggingFace token (also reads HF_TOKEN, NPU_OPTIMIZE_TOKEN)
   -v, --verbose count                Verbosity level (-v, -vv, -vvv)
 ```

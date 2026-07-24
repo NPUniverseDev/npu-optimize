@@ -184,6 +184,31 @@ func testOutput(ver int, withRuntime bool, withBackendVersion string) *Output {
 		}
 	}
 
+	if ver >= 4 {
+		o.LlamaBench = &LlamaBench{
+			Version: "b9180",
+			Source:  "resolved",
+			Path:    "~/.npu-optimize/bin/llama-bench",
+		}
+		o.ProxyBenchmark = &ProxyBenchmark{
+			Model:                 "Qwen3-0.6B-Q4_K_M.gguf",
+			EffectiveBandwidthGBs: 80.5,
+			FitConfig: ProxyFitConfig{
+				NGPULayers: 30,
+				NBatch:     2048,
+				NUBatch:    512,
+				NThreads:   8,
+				CtxSize:    4096,
+				FlashAttn:  true,
+				CacheTypeK: "q8_0",
+				CacheTypeV: "q8_0",
+			},
+			TSProxy: 80.2,
+			Cached:  false,
+		}
+		o.Recommended.ExtrapolationMethod = "bandwidth_scaling_v1"
+	}
+
 	return o
 }
 
@@ -213,6 +238,16 @@ func TestGolden_Version3(t *testing.T) {
 	require.NoError(t, Encode(&buf, o))
 
 	golden, err := os.ReadFile("testdata/schema_v3.json")
+	require.NoError(t, err)
+	assert.JSONEq(t, string(golden), buf.String())
+}
+
+func TestGolden_Version4(t *testing.T) {
+	o := testOutput(4, true, "12.4")
+	var buf bytes.Buffer
+	require.NoError(t, Encode(&buf, o))
+
+	golden, err := os.ReadFile("testdata/schema_v4.json")
 	require.NoError(t, err)
 	assert.JSONEq(t, string(golden), buf.String())
 }

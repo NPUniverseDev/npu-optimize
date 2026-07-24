@@ -37,15 +37,18 @@ func TestCacheDir(t *testing.T) {
 func TestProxyModels(t *testing.T) {
 	assert.Len(t, ProxyModels, 3)
 
-	assert.Equal(t, "Qwen/Qwen2.5-0.5B-GGUF", ProxyModels[0].Repo)
-	assert.Equal(t, "qwen2.5-0.5b-q4_k_m.gguf", ProxyModels[0].File)
-	assert.Equal(t, int64(100_000_000), ProxyModels[0].Size)
+	assert.Equal(t, "unsloth/Qwen3-0.6B-GGUF", ProxyModels[0].Repo)
+	assert.Equal(t, "Qwen3-0.6B-Q4_K_M.gguf", ProxyModels[0].File)
+	assert.Equal(t, int64(396_705_472), ProxyModels[0].Size)
+	assert.Equal(t, "Apache-2.0", ProxyModels[0].License)
 
-	assert.Equal(t, "microsoft/Phi-3-mini-4k-instruct-gguf", ProxyModels[1].Repo)
-	assert.Equal(t, "Phi-3-mini-4k-instruct-q4.gguf", ProxyModels[1].File)
-	assert.Equal(t, int64(250_000_000), ProxyModels[1].Size)
+	assert.Equal(t, "Qwen/Qwen2.5-0.5B-Instruct-GGUF", ProxyModels[1].Repo)
+	assert.Equal(t, "qwen2.5-0.5b-instruct-q4_k_m.gguf", ProxyModels[1].File)
+	assert.Equal(t, int64(491_400_032), ProxyModels[1].Size)
+	assert.Equal(t, "Apache-2.0", ProxyModels[1].License)
 
-	assert.Equal(t, "google/gemma-2-2b-it-GGUF", ProxyModels[2].Repo)
-	assert.Equal(t, "gemma-2-2b-it-q4_k_m.gguf", ProxyModels[2].File)
-	assert.Equal(t, int64(1_500_000_000), ProxyModels[2].Size)
+	assert.Equal(t, "LiquidAI/LFM2-700M-GGUF", ProxyModels[2].Repo)
+	assert.Equal(t, "LFM2-700M-Q4_K_M.gguf", ProxyModels[2].File)
+	assert.Equal(t, int64(468_624_320), ProxyModels[2].Size)
+	assert.Equal(t, "lfm1.0", ProxyModels[2].License)
 }

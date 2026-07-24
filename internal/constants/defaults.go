@@ -24,13 +24,14 @@ const (
 )
 
 var ProxyModels = []ProxyModel{
-	{Repo: "Qwen/Qwen2.5-0.5B-GGUF", File: "qwen2.5-0.5b-q4_k_m.gguf", Size: 100_000_000},
-	{Repo: "microsoft/Phi-3-mini-4k-instruct-gguf", File: "Phi-3-mini-4k-instruct-q4.gguf", Size: 250_000_000},
-	{Repo: "google/gemma-2-2b-it-GGUF", File: "gemma-2-2b-it-q4_k_m.gguf", Size: 1_500_000_000},
+	{Repo: "unsloth/Qwen3-0.6B-GGUF", File: "Qwen3-0.6B-Q4_K_M.gguf", Size: 396_705_472, License: "Apache-2.0"},
+	{Repo: "Qwen/Qwen2.5-0.5B-Instruct-GGUF", File: "qwen2.5-0.5b-instruct-q4_k_m.gguf", Size: 491_400_032, License: "Apache-2.0"},
+	{Repo: "LiquidAI/LFM2-700M-GGUF", File: "LFM2-700M-Q4_K_M.gguf", Size: 468_624_320, License: "lfm1.0"},
 }
 
 type ProxyModel struct {
-	Repo string
-	File string
-	Size int64
+	Repo    string
+	File    string
+	Size    int64
+	License string
 }
