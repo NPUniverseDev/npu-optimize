@@ -209,7 +209,10 @@ func testOutput(ver int, withRuntime bool, withBackendVersion string) *Output {
 			ProxyCached:     false,
 			BenchmarkCached: false,
 		}
-		o.Recommended.ExtrapolationMethod = "bandwidth_scaling_v1"
+		o.Recommended.ExtrapolationMethod = "calibrated_scaling_v2"
+		o.Recommended.TSEstimatedConfidence = "high"
+		o.Recommended.SelectionReason = "meets_vram_and_min_ts"
+		o.Recommended.MinTSTarget = 8
 	}
 
 	return o

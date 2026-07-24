@@ -72,7 +72,10 @@
     "vram_margin_mb": 1024,
     "n_gpu_layers": -1,
     "ctx_max_estimate": 32768,
-    "extrapolation_method": "bandwidth_scaling_v1"
+    "extrapolation_method": "calibrated_scaling_v2",
+    "ts_estimated_confidence": "high",
+    "selection_reason": "meets_vram_and_min_ts",
+    "min_ts_target": 8
   },
   "runtime_recommendation": {
     "backend": "cuda",

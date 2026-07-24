@@ -10,6 +10,7 @@ import (
 
 	benchflow "github.com/Ericson246/npu-optimize/internal/benchmark"
 	"github.com/Ericson246/npu-optimize/internal/cache"
+	"github.com/Ericson246/npu-optimize/internal/calculator"
 	"github.com/Ericson246/npu-optimize/internal/constants"
 	"github.com/Ericson246/npu-optimize/internal/hfclient"
 	"github.com/Ericson246/npu-optimize/internal/hwinfo"
@@ -209,6 +210,8 @@ func runBenchmark() error {
 	stgRunProxyBench.Done(
 		"benchmark_cached", proxyBench.ProxyBenchmark.BenchmarkCached,
 		"ts_proxy", proxyBench.ProxyBenchmark.TSProxy,
+		"ts_proxy_decode", proxyBench.ProxyBenchmark.TSProxyDecode,
+		"ts_proxy_prompt", proxyBench.ProxyBenchmark.TSProxyPrompt,
 		"ts_max_proxy", proxyBench.ProxyBenchmark.TSMaxProxy,
 		"effective_bandwidth_gbs", proxyBench.ProxyBenchmark.EffectiveBandwidthGBs,
 	)
@@ -221,6 +224,7 @@ func runBenchmark() error {
 	result.ProxyBenchmark = &output.ProxyBenchmark{
 		Model:                 proxyBench.ProxyBenchmark.Model,
 		ModelSizeBytes:        proxyBench.ProxyBenchmark.ModelSizeBytes,
+		ModelNumParameters:    proxyBench.ProxyBenchmark.ModelNumParameters,
 		EffectiveBandwidthGBs: proxyBench.ProxyBenchmark.EffectiveBandwidthGBs,
 		FitConfig: output.ProxyFitConfig{
 			NGPULayers: proxyBench.ProxyBenchmark.FitConfig.NGPULayers,
@@ -233,6 +237,8 @@ func runBenchmark() error {
 			CacheTypeV: proxyBench.ProxyBenchmark.FitConfig.CacheTypeV,
 		},
 		TSProxy:         proxyBench.ProxyBenchmark.TSProxy,
+		TSProxyPrompt:   proxyBench.ProxyBenchmark.TSProxyPrompt,
+		TSProxyDecode:   proxyBench.ProxyBenchmark.TSProxyDecode,
 		TSMaxProxy:      proxyBench.ProxyBenchmark.TSMaxProxy,
 		ProxyCached:     proxyBench.ProxyBenchmark.ProxyCached,
 		BenchmarkCached: proxyBench.ProxyBenchmark.BenchmarkCached,
@@ -275,15 +281,53 @@ func runBenchmark() error {
 		fatal(1, "internal_error", "Recommendation data incomplete for benchmark output")
 	}
 
+	var selectionResult *benchflow.SelectionResult
 	if rec.VRAMResult != nil {
-		stgEstimate := applog.StartStage("benchmark", "estimate_ts")
-		bytesPerToken := benchflow.BytesPerToken(rec.SizeBytes, bmCtxSize, rec.VRAMResult.KVcacheBytes)
-		ts, tsErr := benchflow.EstimateTSFromBandwidth(proxyBench.ProxyBenchmark.EffectiveBandwidthGBs, bytesPerToken)
-		if tsErr == nil {
+		stgCalibrate := applog.StartStage("benchmark", "calibrate_estimator", "method", "calibrated_scaling_v2", "min_ts", benchMinTS)
+		selection, selErr := benchflow.SelectCandidateByThroughput(rec, proxyBench.ProxyBenchmark, benchMinTS, bmCtxSize)
+		if selErr != nil {
+			stgCalibrate.Fail(selErr)
+			fatal(1, "internal_error", "Throughput calibration failed", "err", selErr)
+		}
+		selectionResult = &selection
+		stgCalibrate.Done("candidates", len(selection.Candidates), "selection_reason", selection.SelectionReason, "metric_basis", "decode")
+
+		for _, candidate := range selection.Candidates {
+			stgEvalCandidate := applog.StartStage("benchmark", "evaluate_candidate", "file", candidate.File, "quant", candidate.Quantization)
+			stgEvalCandidate.Done(
+				"fits_in_vram", candidate.FitsInVRAM,
+				"ts_estimated", candidate.TSEstimated,
+				"min_ts", benchMinTS,
+				"accepted", candidate.Accepted,
+				"reason", candidate.Reason,
+			)
+		}
+
+		stgSelect := applog.StartStage("benchmark", "select_final_candidate")
+		stgSelect.Done("file", selection.Selected.File, "quant", selection.Selected.Quantization, "viable", selection.Viable, "reason", selection.SelectionReason)
+
+		if selection.Selected.File != "" {
+			rec.File = selection.Selected.File
+			rec.SizeBytes = selection.Selected.SizeBytes
+			rec.Quantization = selection.Selected.Quantization
+			rec.FitsInVRAM = selection.Selected.FitsInVRAM
+
+			for _, fb := range rec.Fallbacks {
+				if fb.File == selection.Selected.File {
+					rec.SHA256 = fb.SHA256
+					break
+				}
+			}
+
+			rec.VRAMResult = calculator.CalculateVRAM(calculator.Params{
+				VRAMFreeMB: cfg.availableMemoryMB,
+				CtxSize:    bmCtxSize,
+				VRAMMargin: effectiveMargin,
+				FileSize:   rec.SizeBytes,
+				Header:     rec.Header,
+			})
+			ts := selection.Selected.TSEstimated
 			rec.VRAMResult.TSEstimated = &ts
-			stgEstimate.Done("ts_estimated", ts)
-		} else {
-			stgEstimate.Fail(tsErr)
 		}
 	}
 
@@ -313,7 +357,29 @@ func runBenchmark() error {
 		NGPULayers:          proxyBench.ProxyBenchmark.FitConfig.NGPULayers,
 		CtxMaxEstimate:      rec.VRAMResult.CtxMaxEstimate,
 		TSEstimated:         rec.VRAMResult.TSEstimated,
-		ExtrapolationMethod: "bandwidth_scaling_v1",
+		ExtrapolationMethod: "calibrated_scaling_v2",
+		TSEstimatedConfidence: func() string {
+			if selectionResult != nil {
+				return selectionResult.Selected.Confidence
+			}
+			if rec.VRAMResult == nil || rec.VRAMResult.TSEstimated == nil {
+				return ""
+			}
+			return "low"
+		}(),
+		SelectionReason: func() string {
+			if selectionResult != nil {
+				return selectionResult.SelectionReason
+			}
+			if rec.FitsInVRAM && rec.VRAMResult != nil && rec.VRAMResult.TSEstimated != nil && *rec.VRAMResult.TSEstimated >= benchMinTS {
+				return "meets_vram_and_min_ts"
+			}
+			if !rec.FitsInVRAM {
+				return "does_not_fit_vram"
+			}
+			return "below_min_ts"
+		}(),
+		MinTSTarget: benchMinTS,
 	}
 
 	result.InferenceParams = &output.InferenceParams{

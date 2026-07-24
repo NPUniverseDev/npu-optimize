@@ -16,7 +16,7 @@ func TestAppConstants(t *testing.T) {
 func TestDefaultValues(t *testing.T) {
 	assert.Equal(t, 16384, DefaultCtxSize)
 	assert.Equal(t, 0, DefaultVRAMMargin)
-	assert.Equal(t, 3.0, DefaultMinTS)
+	assert.Equal(t, 8.0, DefaultMinTS)
 }
 
 func TestHFConstants(t *testing.T) {

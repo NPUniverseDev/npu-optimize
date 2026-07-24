@@ -41,9 +41,12 @@ type ProxyFitConfig struct {
 type ProxyBenchmark struct {
 	Model                 string         `json:"model"`
 	ModelSizeBytes        int64          `json:"model_size_bytes"`
+	ModelNumParameters    int64          `json:"model_num_parameters,omitempty"`
 	EffectiveBandwidthGBs float64        `json:"effective_bandwidth_gbs"`
 	FitConfig             ProxyFitConfig `json:"fit_config"`
 	TSProxy               float64        `json:"ts_proxy"`
+	TSProxyPrompt         float64        `json:"ts_proxy_prompt,omitempty"`
+	TSProxyDecode         float64        `json:"ts_proxy_decode,omitempty"`
 	TSMaxProxy            float64        `json:"ts_max_proxy"`
 	ProxyCached           bool           `json:"proxy_cached"`
 	BenchmarkCached       bool           `json:"benchmark_cached"`
@@ -90,31 +93,34 @@ type RuntimeRecommend struct {
 }
 
 type Recommended struct {
-	Repo                string   `json:"repo"`
-	File                string   `json:"file"`
-	DownloadURL         string   `json:"download_url,omitempty"`
-	SHA256              string   `json:"sha256,omitempty"`
-	SizeBytes           int64    `json:"size_bytes"`
-	Architecture        string   `json:"architecture"`
-	ArchitectureType    string   `json:"architecture_type"`
-	Multimodal          bool     `json:"multimodal"`
-	NLayers             int      `json:"n_layers"`
-	NKVHeads            int      `json:"n_kv_heads"`
-	HeadDim             int      `json:"head_dim"`
-	NExperts            *int     `json:"n_experts,omitempty"`
-	NExpertsUsed        *int     `json:"n_experts_used,omitempty"`
-	NMTPHeads           *int     `json:"n_mtp_heads,omitempty"`
-	NumParameters       int64    `json:"num_parameters,omitempty"`
-	Quantization        string   `json:"quantization,omitempty"`
-	Score               float64  `json:"score,omitempty"`
-	ArchTier            string   `json:"arch_tier,omitempty"`
-	FitsInVRAM          bool     `json:"fits_in_vram"`
-	VRAMFormulaUsed     string   `json:"vram_formula_used"`
-	VRAMMarginMB        int      `json:"vram_margin_mb"`
-	NGPULayers          int      `json:"n_gpu_layers"`
-	CtxMaxEstimate      int      `json:"ctx_max_estimate"`
-	TSEstimated         *float64 `json:"ts_estimated,omitempty"`
-	ExtrapolationMethod string   `json:"extrapolation_method,omitempty"`
+	Repo                  string   `json:"repo"`
+	File                  string   `json:"file"`
+	DownloadURL           string   `json:"download_url,omitempty"`
+	SHA256                string   `json:"sha256,omitempty"`
+	SizeBytes             int64    `json:"size_bytes"`
+	Architecture          string   `json:"architecture"`
+	ArchitectureType      string   `json:"architecture_type"`
+	Multimodal            bool     `json:"multimodal"`
+	NLayers               int      `json:"n_layers"`
+	NKVHeads              int      `json:"n_kv_heads"`
+	HeadDim               int      `json:"head_dim"`
+	NExperts              *int     `json:"n_experts,omitempty"`
+	NExpertsUsed          *int     `json:"n_experts_used,omitempty"`
+	NMTPHeads             *int     `json:"n_mtp_heads,omitempty"`
+	NumParameters         int64    `json:"num_parameters,omitempty"`
+	Quantization          string   `json:"quantization,omitempty"`
+	Score                 float64  `json:"score,omitempty"`
+	ArchTier              string   `json:"arch_tier,omitempty"`
+	FitsInVRAM            bool     `json:"fits_in_vram"`
+	VRAMFormulaUsed       string   `json:"vram_formula_used"`
+	VRAMMarginMB          int      `json:"vram_margin_mb"`
+	NGPULayers            int      `json:"n_gpu_layers"`
+	CtxMaxEstimate        int      `json:"ctx_max_estimate"`
+	TSEstimated           *float64 `json:"ts_estimated,omitempty"`
+	ExtrapolationMethod   string   `json:"extrapolation_method,omitempty"`
+	TSEstimatedConfidence string   `json:"ts_estimated_confidence,omitempty"`
+	SelectionReason       string   `json:"selection_reason,omitempty"`
+	MinTSTarget           float64  `json:"min_ts_target,omitempty"`
 }
 
 type InferenceParams struct {

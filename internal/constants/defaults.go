@@ -11,7 +11,7 @@ const (
 
 	DefaultCtxSize    = 16384
 	DefaultVRAMMargin = 0 // 0 = auto-calculate (5% of free VRAM, min 256, max 1024)
-	DefaultMinTS      = 3.0
+	DefaultMinTS      = 8.0
 
 	HFAPIBaseURL = "https://huggingface.co"
 	HFAPIHost    = "huggingface.co"
