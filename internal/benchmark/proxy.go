@@ -70,7 +70,7 @@ func (r *ProxyResolver) download(model constants.ProxyModel, path string) error 
 	if err != nil {
 		return fmt.Errorf("create proxy file %s: %w", path, err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	if _, err := io.Copy(f, resp.Body); err != nil {
 		return fmt.Errorf("write proxy file %s: %w", path, err)

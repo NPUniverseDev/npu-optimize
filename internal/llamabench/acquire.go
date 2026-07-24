@@ -194,7 +194,7 @@ func (a *Acquirer) fetchFile(url, dst string) error {
 	if err != nil {
 		return fmt.Errorf("create download file: %w", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	if _, err := io.Copy(f, resp.Body); err != nil {
 		return fmt.Errorf("write download file: %w", err)
 	}
@@ -206,7 +206,7 @@ func extractFromZip(archivePath, targetName, dstPath string) error {
 	if err != nil {
 		return fmt.Errorf("open zip archive: %w", err)
 	}
-	defer zr.Close()
+	defer func() { _ = zr.Close() }()
 
 	for _, f := range zr.File {
 		if strings.EqualFold(filepath.Base(f.Name), targetName) {
@@ -229,12 +229,12 @@ func extractFromTarGz(archivePath, targetName, dstPath string) error {
 	if err != nil {
 		return fmt.Errorf("open tar.gz archive: %w", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	gz, err := gzip.NewReader(f)
 	if err != nil {
 		return fmt.Errorf("open gzip stream: %w", err)
 	}
-	defer gz.Close()
+	defer func() { _ = gz.Close() }()
 	tr := tar.NewReader(gz)
 
 	for {
@@ -260,7 +260,7 @@ func writeExecutable(dstPath string, src io.Reader) error {
 	if err != nil {
 		return fmt.Errorf("create output binary: %w", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	if _, err := io.Copy(f, src); err != nil {
 		return fmt.Errorf("write output binary: %w", err)
 	}
