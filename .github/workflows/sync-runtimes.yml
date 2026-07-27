@@ -21,9 +21,45 @@ jobs:
           go-version: '1.26'
 
       - name: Sync runtime catalog
-        run: go run ./tools/sync-catalog/
+        id: sync
+        run: |
+          output=$(go run ./tools/sync-catalog/)
+          echo "$output"
+          bench_url=$(echo "$output" | grep "^LLAMA_BENCH_URL=" | tail -1 | cut -d= -f2-)
+          echo "bench_url=$bench_url" >> "$GITHUB_OUTPUT"
         env:
           GITHUB_TOKEN: ${{ secrets.GH_RELEASE_TOKEN }}
+
+      - name: Download and extract llama-bench
+        if: steps.sync.outputs.bench_url != ''
+        run: |
+          mkdir -p /tmp/bench
+          curl -fL "${{ steps.sync.outputs.bench_url }}" -o /tmp/bench/llama.tar.gz
+          if [[ "${{ steps.sync.outputs.bench_url }}" == *.zip ]]; then
+            sudo apt-get update && sudo apt-get install -y unzip
+            unzip -o /tmp/bench/llama.tar.gz -d /tmp/bench
+          else
+            tar -xzf /tmp/bench/llama.tar.gz -C /tmp/bench
+          fi
+          BENCH_PATH=$(find /tmp/bench -type f -name 'llama-bench' | head -n 1)
+          if [[ -z "$BENCH_PATH" ]]; then
+            echo "llama-bench not found in extracted asset" >&2
+            exit 1
+          fi
+          chmod +x "$BENCH_PATH"
+          echo "NPU_OPTIMIZE_LLAMA_BENCH=$BENCH_PATH" >> "$GITHUB_ENV"
+
+      - name: Download proxy model
+        if: steps.sync.outputs.bench_url != ''
+        run: |
+          mkdir -p /tmp/proxy
+          curl -fL "https://huggingface.co/unsloth/Qwen3-0.6B-GGUF/resolve/main/Qwen3-0.6B-Q4_K_M.gguf" -o /tmp/proxy/proxy.gguf
+          echo "NPU_OPTIMIZE_PROXY_MODEL=/tmp/proxy/proxy.gguf" >> "$GITHUB_ENV"
+
+      - name: Run integration tests
+        if: steps.sync.outputs.bench_url != ''
+        run: |
+          go test -tags=integration ./internal/llamabench -v -count=1
 
       - name: Commit if changed
         run: |

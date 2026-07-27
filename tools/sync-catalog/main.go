@@ -16,9 +16,10 @@ type Release struct {
 }
 
 type Asset struct {
-	Name string `json:"name"`
-	Size int64  `json:"size"`
-	URL  string `json:"url"`
+	Name               string `json:"name"`
+	Size               int64  `json:"size"`
+	URL                string `json:"url"`
+	BrowserDownloadURL string `json:"browser_download_url"`
 }
 
 type Catalog struct {
@@ -68,6 +69,7 @@ func main() {
 
 	client := &http.Client{Timeout: 30 * time.Second}
 	changed := false
+	var llamaRelease *Release
 
 	for si := range cat.Sources {
 		src := &cat.Sources[si]
@@ -82,6 +84,10 @@ func main() {
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "  error: %v\n", err)
 			continue
+		}
+
+		if src.Repo == "ggml-org/llama.cpp" {
+			llamaRelease = release
 		}
 
 		fmt.Printf("  latest tag: %s\n", release.TagName)
@@ -101,23 +107,47 @@ func main() {
 
 	if !changed {
 		fmt.Println("no updates needed")
+	} else {
+		cat.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
+
+		out, err := json.MarshalIndent(cat, "", "  ")
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "error: marshaling catalog: %v\n", err)
+			os.Exit(1)
+		}
+
+		if err := os.WriteFile("docs/runtime-catalog.json", out, 0644); err != nil {
+			fmt.Fprintf(os.Stderr, "error: writing catalog: %v\n", err)
+			os.Exit(1)
+		}
+
+		fmt.Println("catalog updated successfully")
+	}
+
+	if llamaRelease != nil {
+		emitBenchURL(llamaRelease)
+	}
+}
+
+func emitBenchURL(release *Release) {
+	for _, a := range release.Assets {
+		name := strings.ToLower(a.Name)
+		if !strings.HasSuffix(name, ".zip") && !strings.HasSuffix(name, ".tar.gz") && !strings.HasSuffix(name, ".tgz") {
+			continue
+		}
+		if !strings.Contains(name, "linux") {
+			continue
+		}
+		if !strings.Contains(name, "x64") && !strings.Contains(name, "amd64") {
+			continue
+		}
+		if !strings.Contains(name, "llama") && !strings.Contains(name, "bin") {
+			continue
+		}
+		fmt.Printf("LLAMA_BENCH_URL=%s\n", a.BrowserDownloadURL)
 		return
 	}
-
-	cat.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
-
-	out, err := json.MarshalIndent(cat, "", "  ")
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "error: marshaling catalog: %v\n", err)
-		os.Exit(1)
-	}
-
-	if err := os.WriteFile("docs/runtime-catalog.json", out, 0644); err != nil {
-		fmt.Fprintf(os.Stderr, "error: writing catalog: %v\n", err)
-		os.Exit(1)
-	}
-
-	fmt.Println("catalog updated successfully")
+	fmt.Fprintln(os.Stderr, "warning: no llama-bench linux/amd64 asset found in latest release")
 }
 
 func fetchLatestRelease(client *http.Client, repo, token string) (*Release, error) {
