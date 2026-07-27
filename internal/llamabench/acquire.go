@@ -139,7 +139,7 @@ func (a *Acquirer) client() *http.Client {
 func pickAsset(assets []releaseAsset) (string, error) {
 	osNeedles := map[string][]string{
 		"windows": {"win", "windows"},
-		"linux":   {"linux"},
+		"linux":   {"linux", "ubuntu"},
 		"darwin":  {"mac", "darwin", "metal"},
 	}
 	archNeedles := map[string][]string{

@@ -135,7 +135,7 @@ func emitBenchURL(release *Release) {
 		if !strings.HasSuffix(name, ".zip") && !strings.HasSuffix(name, ".tar.gz") && !strings.HasSuffix(name, ".tgz") {
 			continue
 		}
-		if !strings.Contains(name, "linux") {
+		if !strings.Contains(name, "linux") && !strings.Contains(name, "ubuntu") {
 			continue
 		}
 		if !strings.Contains(name, "x64") && !strings.Contains(name, "amd64") {
