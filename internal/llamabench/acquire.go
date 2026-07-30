@@ -54,12 +54,17 @@ func (a *Acquirer) Resolve(explicitPath string) (string, error) {
 		return "", fmt.Errorf("create llama-bench cache dir: %w", err)
 	}
 
-	candidate := filepath.Join(a.CacheDir, binaryName())
+	candidate := filepath.Join(a.installDir(), binaryName())
 	if isExecutableFile(candidate) {
 		return candidate, nil
 	}
 
-	if err := a.downloadTo(candidate); err != nil {
+	legacyCandidate := filepath.Join(a.CacheDir, binaryName())
+	if isExecutableFile(legacyCandidate) {
+		return legacyCandidate, nil
+	}
+
+	if err := a.downloadTo(a.installDir()); err != nil {
 		return "", err
 	}
 	if isExecutableFile(candidate) {
@@ -78,7 +83,7 @@ type releaseAsset struct {
 	BrowserDownloadURL string `json:"browser_download_url"`
 }
 
-func (a *Acquirer) downloadTo(dstPath string) error {
+func (a *Acquirer) downloadTo(installDir string) error {
 	if a.Repo == "" || a.Version == "" {
 		return fmt.Errorf("llama-bench repository and version are required for download")
 	}
@@ -120,13 +125,45 @@ func (a *Acquirer) downloadTo(dstPath string) error {
 	}
 	defer os.Remove(tmpArchive)
 
+	tmpInstallDir, err := os.MkdirTemp(a.CacheDir, "llama-bench-install-*")
+	if err != nil {
+		return fmt.Errorf("create temporary install dir: %w", err)
+	}
+	installed := false
+	defer func() {
+		if !installed {
+			_ = os.RemoveAll(tmpInstallDir)
+		}
+	}()
+
 	if strings.HasSuffix(strings.ToLower(assetURL), ".zip") {
-		return extractFromZip(tmpArchive, binaryName(), dstPath)
+		if err := extractBundleFromZip(tmpArchive, binaryName(), tmpInstallDir); err != nil {
+			return err
+		}
+	} else if strings.HasSuffix(strings.ToLower(assetURL), ".tar.gz") || strings.HasSuffix(strings.ToLower(assetURL), ".tgz") {
+		if err := extractBundleFromTarGz(tmpArchive, binaryName(), tmpInstallDir); err != nil {
+			return err
+		}
+	} else {
+		return fmt.Errorf("unsupported archive format for asset %s", assetURL)
 	}
-	if strings.HasSuffix(strings.ToLower(assetURL), ".tar.gz") || strings.HasSuffix(strings.ToLower(assetURL), ".tgz") {
-		return extractFromTarGz(tmpArchive, binaryName(), dstPath)
+
+	binaryPath := filepath.Join(tmpInstallDir, binaryName())
+	if !isExecutableFile(binaryPath) {
+		return fmt.Errorf("llama-bench binary not installed in %s", tmpInstallDir)
 	}
-	return fmt.Errorf("unsupported archive format for asset %s", assetURL)
+
+	if err := os.MkdirAll(filepath.Dir(installDir), 0o755); err != nil {
+		return fmt.Errorf("create install parent dir: %w", err)
+	}
+	if err := os.RemoveAll(installDir); err != nil {
+		return fmt.Errorf("cleanup previous install dir: %w", err)
+	}
+	if err := os.Rename(tmpInstallDir, installDir); err != nil {
+		return fmt.Errorf("finalize install dir: %w", err)
+	}
+	installed = true
+	return nil
 }
 
 func (a *Acquirer) client() *http.Client {
@@ -140,7 +177,7 @@ func pickAsset(assets []releaseAsset) (string, error) {
 	osNeedles := map[string][]string{
 		"windows": {"win", "windows"},
 		"linux":   {"linux", "ubuntu"},
-		"darwin":  {"mac", "darwin", "metal"},
+		"darwin":  {"mac", "darwin"},
 	}
 	archNeedles := map[string][]string{
 		"amd64": {"x64", "amd64"},
@@ -152,6 +189,10 @@ func pickAsset(assets []releaseAsset) (string, error) {
 		return "", fmt.Errorf("unsupported platform for llama-bench download: %s/%s", runtime.GOOS, runtime.GOARCH)
 	}
 
+	bestScore := -1
+	bestName := ""
+	bestURL := ""
+
 	for _, a := range assets {
 		name := strings.ToLower(a.Name)
 		if !strings.HasSuffix(name, ".zip") && !strings.HasSuffix(name, ".tar.gz") && !strings.HasSuffix(name, ".tgz") {
@@ -160,12 +201,45 @@ func pickAsset(assets []releaseAsset) (string, error) {
 		if !containsAny(name, nOS) || !containsAny(name, nArch) {
 			continue
 		}
-		if !strings.Contains(name, "bin") && !strings.Contains(name, "llama") {
+		if !strings.Contains(name, "llama") || !strings.Contains(name, "bin") {
 			continue
 		}
-		return a.BrowserDownloadURL, nil
+
+		score := assetScore(name)
+		if score < 0 {
+			continue
+		}
+
+		if score > bestScore || (score == bestScore && (bestName == "" || name < bestName)) {
+			bestScore = score
+			bestName = name
+			bestURL = a.BrowserDownloadURL
+		}
 	}
-	return "", fmt.Errorf("no matching llama-bench asset found for %s/%s", runtime.GOOS, runtime.GOARCH)
+
+	if bestURL == "" {
+		return "", fmt.Errorf("no matching llama-bench asset found for %s/%s", runtime.GOOS, runtime.GOARCH)
+	}
+	return bestURL, nil
+}
+
+func assetScore(name string) int {
+	if strings.Contains(name, "cudart-") {
+		return -1
+	}
+	if strings.Contains(name, "cuda") || strings.Contains(name, "vulkan") || strings.Contains(name, "rocm") || strings.Contains(name, "openvino") || strings.Contains(name, "sycl") || strings.Contains(name, "hip") || strings.Contains(name, "opencl") {
+		return -1
+	}
+
+	score := 0
+	if strings.Contains(name, "cpu") {
+		score += 10
+	}
+	if strings.Contains(name, "win-cpu") || strings.Contains(name, "ubuntu") || strings.Contains(name, "linux") || strings.Contains(name, "macos") {
+		score += 5
+	}
+
+	return score
 }
 
 func containsAny(s string, needles []string) bool {
@@ -202,43 +276,108 @@ func (a *Acquirer) fetchFile(url, dst string) error {
 }
 
 func extractFromZip(archivePath, targetName, dstPath string) error {
+	tmpDir, err := os.MkdirTemp(filepath.Dir(dstPath), "llama-bench-extract-*")
+	if err != nil {
+		return fmt.Errorf("create temporary extract dir: %w", err)
+	}
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+
+	if err := extractBundleFromZip(archivePath, targetName, tmpDir); err != nil {
+		return err
+	}
+	binaryPath, err := locateExtractedBinary(tmpDir, targetName)
+	if err != nil {
+		return err
+	}
+	f, err := os.Open(binaryPath)
+	if err != nil {
+		return fmt.Errorf("open extracted binary: %w", err)
+	}
+	defer func() { _ = f.Close() }()
+	return writeExecutable(dstPath, f)
+}
+
+func extractBundleFromZip(archivePath, targetName, dstDir string) error {
 	zr, err := zip.OpenReader(archivePath)
 	if err != nil {
 		return fmt.Errorf("open zip archive: %w", err)
 	}
 	defer func() { _ = zr.Close() }()
+	if err := os.MkdirAll(dstDir, 0o755); err != nil {
+		return fmt.Errorf("create destination dir: %w", err)
+	}
 
 	var best *zip.File
 	bestPriority := 0
+	runtimeEntries := make(map[string]*zip.File)
 	for _, f := range zr.File {
 		if f.FileInfo().IsDir() {
 			continue
 		}
-		priority := binaryMatchPriority(filepath.Base(f.Name), targetName)
+		baseName := filepath.Base(f.Name)
+		priority := binaryMatchPriority(baseName, targetName)
 		if priority > bestPriority {
 			bestPriority = priority
 			best = f
 			if priority == 3 {
-				break
+				continue
 			}
+		}
+
+		if shouldExtractRuntimeFile(baseName) {
+			runtimeEntries[strings.ToLower(baseName)] = f
 		}
 	}
 	if best == nil {
 		return fmt.Errorf("binary %s not found in zip archive", targetName)
 	}
 
-	rc, err := best.Open()
-	if err != nil {
-		return fmt.Errorf("open zip entry: %w", err)
+	runtimeEntries[strings.ToLower(filepath.Base(best.Name))] = best
+	for _, entry := range runtimeEntries {
+		baseName := filepath.Base(entry.Name)
+		rc, err := entry.Open()
+		if err != nil {
+			return fmt.Errorf("open zip entry: %w", err)
+		}
+
+		dstPath := filepath.Join(dstDir, baseName)
+		if strings.EqualFold(baseName, filepath.Base(best.Name)) {
+			err = writeExecutable(dstPath, rc)
+		} else {
+			err = writeRegularFile(dstPath, rc)
+		}
+		_ = rc.Close()
+		if err != nil {
+			return err
+		}
 	}
-	defer rc.Close()
-	if err := writeExecutable(dstPath, rc); err != nil {
-		return err
-	}
+
 	return nil
 }
 
 func extractFromTarGz(archivePath, targetName, dstPath string) error {
+	tmpDir, err := os.MkdirTemp(filepath.Dir(dstPath), "llama-bench-extract-*")
+	if err != nil {
+		return fmt.Errorf("create temporary extract dir: %w", err)
+	}
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+
+	if err := extractBundleFromTarGz(archivePath, targetName, tmpDir); err != nil {
+		return err
+	}
+	binaryPath, err := locateExtractedBinary(tmpDir, targetName)
+	if err != nil {
+		return err
+	}
+	f, err := os.Open(binaryPath)
+	if err != nil {
+		return fmt.Errorf("open extracted binary: %w", err)
+	}
+	defer func() { _ = f.Close() }()
+	return writeExecutable(dstPath, f)
+}
+
+func extractBundleFromTarGz(archivePath, targetName, dstDir string) error {
 	selectedName, err := selectTarEntry(archivePath, targetName)
 	if err != nil {
 		return err
@@ -256,6 +395,10 @@ func extractFromTarGz(archivePath, targetName, dstPath string) error {
 	defer func() { _ = gz.Close() }()
 	tr := tar.NewReader(gz)
 
+	if err := os.MkdirAll(dstDir, 0o755); err != nil {
+		return fmt.Errorf("create destination dir: %w", err)
+	}
+
 	for {
 		hdr, err := tr.Next()
 		if err == io.EOF {
@@ -267,15 +410,26 @@ func extractFromTarGz(archivePath, targetName, dstPath string) error {
 		if hdr.FileInfo().IsDir() {
 			continue
 		}
-		if hdr.Name == selectedName {
+
+		baseName := filepath.Base(hdr.Name)
+		isBench := hdr.Name == selectedName
+		if !isBench && !shouldExtractRuntimeFile(baseName) {
+			continue
+		}
+
+		dstPath := filepath.Join(dstDir, baseName)
+		if isBench {
 			if err := writeExecutable(dstPath, tr); err != nil {
 				return err
 			}
-			return nil
+			continue
+		}
+		if err := writeRegularFile(dstPath, tr); err != nil {
+			return err
 		}
 	}
 
-	return fmt.Errorf("binary %s not found in tar.gz archive", targetName)
+	return nil
 }
 
 func selectTarEntry(archivePath, targetName string) (string, error) {
@@ -336,6 +490,58 @@ func binaryMatchPriority(entryBaseName, targetName string) int {
 	return 0
 }
 
+func shouldExtractRuntimeFile(name string) bool {
+	lower := strings.ToLower(filepath.Base(name))
+	if strings.HasSuffix(lower, ".dll") {
+		return true
+	}
+	if strings.Contains(lower, ".so") {
+		return true
+	}
+	if strings.HasSuffix(lower, ".dylib") {
+		return true
+	}
+	return false
+}
+
+func locateExtractedBinary(dir, targetName string) (string, error) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return "", fmt.Errorf("read extracted directory: %w", err)
+	}
+
+	bestPriority := 0
+	bestName := ""
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		name := e.Name()
+		priority := binaryMatchPriority(name, targetName)
+		if priority > bestPriority {
+			bestPriority = priority
+			bestName = name
+		}
+	}
+	if bestName == "" {
+		return "", fmt.Errorf("binary %s not found in extracted directory", targetName)
+	}
+
+	return filepath.Join(dir, bestName), nil
+}
+
+func writeRegularFile(dstPath string, src io.Reader) error {
+	f, err := os.Create(dstPath)
+	if err != nil {
+		return fmt.Errorf("create output file: %w", err)
+	}
+	defer func() { _ = f.Close() }()
+	if _, err := io.Copy(f, src); err != nil {
+		return fmt.Errorf("write output file: %w", err)
+	}
+	return nil
+}
+
 func writeExecutable(dstPath string, src io.Reader) error {
 	f, err := os.Create(dstPath)
 	if err != nil {
@@ -369,4 +575,12 @@ func isExecutableFile(path string) bool {
 		return strings.HasSuffix(strings.ToLower(path), ".exe")
 	}
 	return fi.Mode()&0o111 != 0
+}
+
+func (a *Acquirer) installDir() string {
+	return filepath.Join(a.CacheDir, a.Version, platformSuffix())
+}
+
+func platformSuffix() string {
+	return runtime.GOOS + "-" + runtime.GOARCH
 }

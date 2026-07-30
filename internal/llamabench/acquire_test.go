@@ -1,7 +1,11 @@
 package llamabench
 
 import (
+	"archive/tar"
 	"archive/zip"
+	"bytes"
+	"compress/gzip"
+	"io"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -14,6 +18,38 @@ import (
 func TestPickAsset_NoMatch(t *testing.T) {
 	_, err := pickAsset([]releaseAsset{{Name: "foo.txt", BrowserDownloadURL: "https://example.com/foo.txt"}})
 	assert.Error(t, err)
+}
+
+func TestPickAsset_PrefersCPUBundle(t *testing.T) {
+	arch := "x64"
+	if runtime.GOARCH == "arm64" {
+		arch = "arm64"
+	}
+
+	var cpuName string
+	var acceleratedName string
+	switch runtime.GOOS {
+	case "windows":
+		cpuName = "llama-b10192-bin-win-cpu-" + arch + ".zip"
+		acceleratedName = "cudart-llama-bin-win-cuda-12.4-" + arch + ".zip"
+	case "linux":
+		cpuName = "llama-b10192-bin-ubuntu-" + arch + ".tar.gz"
+		acceleratedName = "llama-b10192-bin-ubuntu-vulkan-" + arch + ".tar.gz"
+	case "darwin":
+		cpuName = "llama-b10192-bin-macos-" + arch + ".tar.gz"
+		acceleratedName = "llama-b10192-bin-macos-cuda-" + arch + ".tar.gz"
+	default:
+		t.Skip("unsupported test platform")
+	}
+
+	assets := []releaseAsset{
+		{Name: acceleratedName, BrowserDownloadURL: "https://example.com/accelerated"},
+		{Name: cpuName, BrowserDownloadURL: "https://example.com/cpu"},
+	}
+
+	url, err := pickAsset(assets)
+	require.NoError(t, err)
+	assert.Equal(t, "https://example.com/cpu", url)
 }
 
 func TestResolve_ExplicitPath(t *testing.T) {
@@ -94,6 +130,57 @@ func TestExtractFromZip_FallbackContainsName(t *testing.T) {
 	assert.Equal(t, []byte("custom-binary"), data)
 }
 
+func TestExtractBundleFromZip_ExtractsRuntimeFiles(t *testing.T) {
+	dir := t.TempDir()
+	archive := filepath.Join(dir, "llama.zip")
+	require.NoError(t, writeZipArchive(archive, map[string][]byte{
+		"bin/llama-bench.exe":  []byte("bench"),
+		"bin/llama-common.dll": []byte("dll"),
+		"README.md":            []byte("ignored"),
+	}))
+
+	installDir := filepath.Join(dir, "install")
+	require.NoError(t, extractBundleFromZip(archive, "llama-bench.exe", installDir))
+
+	assert.FileExists(t, filepath.Join(installDir, "llama-bench.exe"))
+	assert.FileExists(t, filepath.Join(installDir, "llama-common.dll"))
+	assert.NoFileExists(t, filepath.Join(installDir, "README.md"))
+}
+
+func TestExtractBundleFromTarGz_ExtractsRuntimeFiles(t *testing.T) {
+	dir := t.TempDir()
+	archive := filepath.Join(dir, "llama.tar.gz")
+	require.NoError(t, writeTarGzArchive(archive, map[string][]byte{
+		"llama-b9180/llama-bench":            []byte("bench"),
+		"llama-b9180/libllama-common.so.0":   []byte("so"),
+		"llama-b9180/libggml-base.so.0.11.1": []byte("so2"),
+		"llama-b9180/NOTES.txt":              []byte("ignored"),
+	}))
+
+	installDir := filepath.Join(dir, "install")
+	require.NoError(t, extractBundleFromTarGz(archive, "llama-bench", installDir))
+
+	assert.FileExists(t, filepath.Join(installDir, "llama-bench"))
+	assert.FileExists(t, filepath.Join(installDir, "libllama-common.so.0"))
+	assert.FileExists(t, filepath.Join(installDir, "libggml-base.so.0.11.1"))
+	assert.NoFileExists(t, filepath.Join(installDir, "NOTES.txt"))
+}
+
+func TestExtractFromTarGz_FallbackWithoutExe(t *testing.T) {
+	dir := t.TempDir()
+	archive := filepath.Join(dir, "llama.tar.gz")
+	require.NoError(t, writeTarGzArchive(archive, map[string][]byte{
+		"llama-b9180/llama-bench": []byte("bench"),
+	}))
+
+	dst := filepath.Join(dir, "llama-bench.exe")
+	require.NoError(t, extractFromTarGz(archive, "llama-bench.exe", dst))
+
+	data, err := os.ReadFile(dst)
+	require.NoError(t, err)
+	assert.Equal(t, []byte("bench"), data)
+}
+
 func writeZipArchive(path string, entries map[string][]byte) error {
 	f, err := os.Create(path)
 	if err != nil {
@@ -110,6 +197,36 @@ func writeZipArchive(path string, entries map[string][]byte) error {
 			return err
 		}
 		if _, err := w.Write(content); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func writeTarGzArchive(path string, entries map[string][]byte) error {
+	f, err := os.Create(path)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = f.Close() }()
+
+	gz := gzip.NewWriter(f)
+	defer func() { _ = gz.Close() }()
+
+	tw := tar.NewWriter(gz)
+	defer func() { _ = tw.Close() }()
+
+	for name, content := range entries {
+		hdr := &tar.Header{
+			Name: name,
+			Mode: 0o644,
+			Size: int64(len(content)),
+		}
+		if err := tw.WriteHeader(hdr); err != nil {
+			return err
+		}
+		if _, err := io.Copy(tw, bytes.NewReader(content)); err != nil {
 			return err
 		}
 	}
