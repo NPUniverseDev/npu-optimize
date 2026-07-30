@@ -64,9 +64,20 @@ jobs:
         run: |
           $bin = if ($env:RUNNER_OS -eq "Windows") { ".\\npu-optimize.exe" } else { "./npu-optimize" }
           & $bin detect --mode cpu --output json 1> detect.json 2> detect.err
-          if ($LASTEXITCODE -ne 0 -and $LASTEXITCODE -ne 2) {
+          $exitCode = $LASTEXITCODE
+          if ($exitCode -eq 1) {
             Get-Content detect.err
-            throw "detect command failed with exit code $LASTEXITCODE"
+            throw "detect command failed with exit code $exitCode"
+          }
+
+          if (@(3, 4) -contains $exitCode) {
+            $errRaw = Get-Content detect.err -Raw
+            if ([string]::IsNullOrWhiteSpace($errRaw)) { throw "detect error output is empty for exit code $exitCode" }
+            $errObj = $errRaw | ConvertFrom-Json
+            if (-not $errObj.error) { throw "detect error output missing error=true" }
+            if ($errObj.error_code -ne $exitCode) { throw "detect error_code mismatch: expected $exitCode got $($errObj.error_code)" }
+            if (-not $errObj.error_type) { throw "detect error output missing error_type" }
+            return
           }
 
           $raw = Get-Content detect.json -Raw
@@ -89,10 +100,22 @@ jobs:
         run: |
           $bin = if ($env:RUNNER_OS -eq "Windows") { ".\\npu-optimize.exe" } else { "./npu-optimize" }
           & $bin detect --mode cpu --output text 1> detect.txt 2> detect-text.err
-          if ($LASTEXITCODE -ne 0 -and $LASTEXITCODE -ne 2) {
+          $exitCode = $LASTEXITCODE
+          if ($exitCode -eq 1) {
             Get-Content detect-text.err
-            throw "detect text command failed with exit code $LASTEXITCODE"
+            throw "detect text command failed with exit code $exitCode"
           }
+
+          if (@(3, 4) -contains $exitCode) {
+            $errRaw = Get-Content detect-text.err -Raw
+            if ([string]::IsNullOrWhiteSpace($errRaw)) { throw "detect text error output is empty for exit code $exitCode" }
+            $errObj = $errRaw | ConvertFrom-Json
+            if (-not $errObj.error) { throw "detect text error output missing error=true" }
+            if ($errObj.error_code -ne $exitCode) { throw "detect text error_code mismatch: expected $exitCode got $($errObj.error_code)" }
+            if (-not $errObj.error_type) { throw "detect text error output missing error_type" }
+            return
+          }
+
           $text = Get-Content detect.txt -Raw
           if ([string]::IsNullOrWhiteSpace($text)) { throw "detect text output is empty" }
 
@@ -104,9 +127,20 @@ jobs:
         run: |
           $bin = if ($env:RUNNER_OS -eq "Windows") { ".\\npu-optimize.exe" } else { "./npu-optimize" }
           & $bin benchmark --mode cpu --min-ts 0 --output json 1> benchmark.json 2> benchmark.err
-          if ($LASTEXITCODE -ne 0 -and $LASTEXITCODE -ne 2) {
+          $exitCode = $LASTEXITCODE
+          if ($exitCode -eq 1) {
             Get-Content benchmark.err
-            throw "benchmark command failed with exit code $LASTEXITCODE"
+            throw "benchmark command failed with exit code $exitCode"
+          }
+
+          if (@(3, 4) -contains $exitCode) {
+            $errRaw = Get-Content benchmark.err -Raw
+            if ([string]::IsNullOrWhiteSpace($errRaw)) { throw "benchmark error output is empty for exit code $exitCode" }
+            $errObj = $errRaw | ConvertFrom-Json
+            if (-not $errObj.error) { throw "benchmark error output missing error=true" }
+            if ($errObj.error_code -ne $exitCode) { throw "benchmark error_code mismatch: expected $exitCode got $($errObj.error_code)" }
+            if (-not $errObj.error_type) { throw "benchmark error output missing error_type" }
+            return
           }
 
           $raw = Get-Content benchmark.json -Raw
