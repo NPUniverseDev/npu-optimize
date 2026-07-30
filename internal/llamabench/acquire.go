@@ -208,23 +208,42 @@ func extractFromZip(archivePath, targetName, dstPath string) error {
 	}
 	defer func() { _ = zr.Close() }()
 
+	var best *zip.File
+	bestPriority := 0
 	for _, f := range zr.File {
-		if strings.EqualFold(filepath.Base(f.Name), targetName) {
-			rc, err := f.Open()
-			if err != nil {
-				return fmt.Errorf("open zip entry: %w", err)
+		if f.FileInfo().IsDir() {
+			continue
+		}
+		priority := binaryMatchPriority(filepath.Base(f.Name), targetName)
+		if priority > bestPriority {
+			bestPriority = priority
+			best = f
+			if priority == 3 {
+				break
 			}
-			defer rc.Close()
-			if err := writeExecutable(dstPath, rc); err != nil {
-				return err
-			}
-			return nil
 		}
 	}
-	return fmt.Errorf("binary %s not found in zip archive", targetName)
+	if best == nil {
+		return fmt.Errorf("binary %s not found in zip archive", targetName)
+	}
+
+	rc, err := best.Open()
+	if err != nil {
+		return fmt.Errorf("open zip entry: %w", err)
+	}
+	defer rc.Close()
+	if err := writeExecutable(dstPath, rc); err != nil {
+		return err
+	}
+	return nil
 }
 
 func extractFromTarGz(archivePath, targetName, dstPath string) error {
+	selectedName, err := selectTarEntry(archivePath, targetName)
+	if err != nil {
+		return err
+	}
+
 	f, err := os.Open(archivePath)
 	if err != nil {
 		return fmt.Errorf("open tar.gz archive: %w", err)
@@ -245,14 +264,76 @@ func extractFromTarGz(archivePath, targetName, dstPath string) error {
 		if err != nil {
 			return fmt.Errorf("read tar entry: %w", err)
 		}
-		if strings.EqualFold(filepath.Base(hdr.Name), targetName) {
+		if hdr.FileInfo().IsDir() {
+			continue
+		}
+		if hdr.Name == selectedName {
 			if err := writeExecutable(dstPath, tr); err != nil {
 				return err
 			}
 			return nil
 		}
 	}
+
 	return fmt.Errorf("binary %s not found in tar.gz archive", targetName)
+}
+
+func selectTarEntry(archivePath, targetName string) (string, error) {
+	f, err := os.Open(archivePath)
+	if err != nil {
+		return "", fmt.Errorf("open tar.gz archive: %w", err)
+	}
+	defer func() { _ = f.Close() }()
+	gz, err := gzip.NewReader(f)
+	if err != nil {
+		return "", fmt.Errorf("open gzip stream: %w", err)
+	}
+	defer func() { _ = gz.Close() }()
+	tr := tar.NewReader(gz)
+
+	bestPriority := 0
+	bestName := ""
+	for {
+		hdr, err := tr.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return "", fmt.Errorf("read tar entry: %w", err)
+		}
+		if hdr.FileInfo().IsDir() {
+			continue
+		}
+		priority := binaryMatchPriority(filepath.Base(hdr.Name), targetName)
+		if priority > bestPriority {
+			bestPriority = priority
+			bestName = hdr.Name
+			if priority == 3 {
+				break
+			}
+		}
+	}
+	if bestName == "" {
+		return "", fmt.Errorf("binary %s not found in tar.gz archive", targetName)
+	}
+	return bestName, nil
+}
+
+func binaryMatchPriority(entryBaseName, targetName string) int {
+	entry := strings.ToLower(entryBaseName)
+	target := strings.ToLower(targetName)
+
+	if entry == target {
+		return 3
+	}
+	if strings.TrimSuffix(entry, ".exe") == strings.TrimSuffix(target, ".exe") {
+		return 2
+	}
+	if strings.Contains(entry, "llama-bench") {
+		return 1
+	}
+
+	return 0
 }
 
 func writeExecutable(dstPath string, src io.Reader) error {

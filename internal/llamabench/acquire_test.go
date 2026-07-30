@@ -1,6 +1,7 @@
 package llamabench
 
 import (
+	"archive/zip"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -54,4 +55,64 @@ func TestResolve_NotFound(t *testing.T) {
 	a := NewAcquirer(t.TempDir())
 	_, err := a.Resolve(filepath.Join(t.TempDir(), "missing"))
 	assert.Error(t, err)
+}
+
+func TestBinaryMatchPriority(t *testing.T) {
+	assert.Equal(t, 3, binaryMatchPriority("llama-bench.exe", "llama-bench.exe"))
+	assert.Equal(t, 2, binaryMatchPriority("llama-bench", "llama-bench.exe"))
+	assert.Equal(t, 1, binaryMatchPriority("llama-bench-vulkan", "llama-bench.exe"))
+	assert.Equal(t, 0, binaryMatchPriority("main.exe", "llama-bench.exe"))
+}
+
+func TestExtractFromZip_FallbackWithoutExe(t *testing.T) {
+	dir := t.TempDir()
+	archive := filepath.Join(dir, "llama.zip")
+	require.NoError(t, writeZipArchive(archive, map[string][]byte{
+		"llama-bench": []byte("binary-content"),
+	}))
+
+	dst := filepath.Join(dir, "llama-bench.exe")
+	require.NoError(t, extractFromZip(archive, "llama-bench.exe", dst))
+
+	data, err := os.ReadFile(dst)
+	require.NoError(t, err)
+	assert.Equal(t, []byte("binary-content"), data)
+}
+
+func TestExtractFromZip_FallbackContainsName(t *testing.T) {
+	dir := t.TempDir()
+	archive := filepath.Join(dir, "llama.zip")
+	require.NoError(t, writeZipArchive(archive, map[string][]byte{
+		"bin/windows/llama-bench-custom.exe": []byte("custom-binary"),
+	}))
+
+	dst := filepath.Join(dir, "llama-bench.exe")
+	require.NoError(t, extractFromZip(archive, "llama-bench.exe", dst))
+
+	data, err := os.ReadFile(dst)
+	require.NoError(t, err)
+	assert.Equal(t, []byte("custom-binary"), data)
+}
+
+func writeZipArchive(path string, entries map[string][]byte) error {
+	f, err := os.Create(path)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	zw := zip.NewWriter(f)
+	defer zw.Close()
+
+	for name, content := range entries {
+		w, err := zw.Create(name)
+		if err != nil {
+			return err
+		}
+		if _, err := w.Write(content); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
