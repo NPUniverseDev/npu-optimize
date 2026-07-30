@@ -1,5 +1,29 @@
 # Changelog
 
+## [0.4.0](https://github.com/NPUniverseDev/npu-optimize/compare/v0.3.2...v0.4.0) (2026-07-30)
+
+
+### Features
+
+* add stage-based progress logging ([bcb3d9d](https://github.com/NPUniverseDev/npu-optimize/commit/bcb3d9d253a6adbad34f6f0b57f720ca42eaf8bd))
+* **benchmark:** add calibrated selection loop and schema v4 tracing ([46bdd5b](https://github.com/NPUniverseDev/npu-optimize/commit/46bdd5bc2aa114a2ab1b1c4a43567d7b2526b31b))
+* **benchmark:** use decode-based proxy metrics for ts calibration ([81df969](https://github.com/NPUniverseDev/npu-optimize/commit/81df9691eb990b3fcdf257a83e9459e77ef287bc))
+* implement benchmark pipeline and schema v4 ([0943157](https://github.com/NPUniverseDev/npu-optimize/commit/09431572b4c7a145216dea705eba596bb9906142))
+
+
+### Bug Fixes
+
+* **acquire_test:** ensure proper closure of file and zip writer in writeZipArchive ([3762c6d](https://github.com/NPUniverseDev/npu-optimize/commit/3762c6d766441f07b53885a88b9bec701fc396e8))
+* **acquire:** enhance asset selection and extraction for llama-bench ([2008918](https://github.com/NPUniverseDev/npu-optimize/commit/20089187b91e67190a8a925113a5d57a627ccd17))
+* **acquire:** preserve symlinked runtime files during extraction from tar.gz ([894d452](https://github.com/NPUniverseDev/npu-optimize/commit/894d452b566286eab7bd0a4252080aea5800d395))
+* **chrone:** improve error handling in detect and benchmark commands ([2e044a6](https://github.com/NPUniverseDev/npu-optimize/commit/2e044a66aa0c8b584bb6972aff804e2ccaca1b82))
+* embed runtime catalog and support numeric flash_attn ([3550aa6](https://github.com/NPUniverseDev/npu-optimize/commit/3550aa6d4c4ee3a9c15edce9c2dc7941e8de9587))
+* harden benchmark flow and acquisition ([5bd75af](https://github.com/NPUniverseDev/npu-optimize/commit/5bd75afd8c79e833eebd2d1fa17d03eb73500f70))
+* **lint:** handle Close return values for errcheck ([759f1b7](https://github.com/NPUniverseDev/npu-optimize/commit/759f1b7574ce57d1e70b76d48068e08b6ad84bb3))
+* **llamabench:** support windows llama-bench zip variants during auto-download ([f174473](https://github.com/NPUniverseDev/npu-optimize/commit/f1744739a7de29b31c73d18ca41a0b8d48a65c31))
+* match ubuntu asset names in llama.cpp release b10151 ([cde093f](https://github.com/NPUniverseDev/npu-optimize/commit/cde093ff911bf7958d3b1938bc3c5e1facf704a8))
+* replace integration-benchmark cron with pre-commit validation in sync-runtimes ([d06aa5b](https://github.com/NPUniverseDev/npu-optimize/commit/d06aa5b7c3317e450c6e6fb2956c5da703c07e99))
+
 ## [0.3.2](https://github.com/NPUniverseDev/npu-optimize/compare/v0.3.1...v0.3.2) (2026-07-05)
 
 
