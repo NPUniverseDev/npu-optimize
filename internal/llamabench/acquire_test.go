@@ -99,10 +99,10 @@ func writeZipArchive(path string, entries map[string][]byte) error {
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	zw := zip.NewWriter(f)
-	defer zw.Close()
+	defer func() { _ = zw.Close() }()
 
 	for name, content := range entries {
 		w, err := zw.Create(name)
