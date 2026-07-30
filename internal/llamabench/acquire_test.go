@@ -166,6 +166,34 @@ func TestExtractBundleFromTarGz_ExtractsRuntimeFiles(t *testing.T) {
 	assert.NoFileExists(t, filepath.Join(installDir, "NOTES.txt"))
 }
 
+func TestExtractBundleFromTarGz_PreservesSymlinkedRuntime(t *testing.T) {
+	dir := t.TempDir()
+	archive := filepath.Join(dir, "llama-symlink.tar.gz")
+	require.NoError(t, writeTarGzArchiveEntries(archive, []tarArchiveEntry{
+		{Name: "llama-b9180/llama-bench", Content: []byte("bench"), Mode: 0o755},
+		{Name: "llama-b9180/libllama-common.so.0.0.9180", Content: []byte("real-lib"), Mode: 0o644},
+		{Name: "llama-b9180/libllama-common.so.0", Typeflag: tar.TypeSymlink, Linkname: "libllama-common.so.0.0.9180", Mode: 0o777},
+	}))
+
+	installDir := filepath.Join(dir, "install")
+	require.NoError(t, extractBundleFromTarGz(archive, "llama-bench", installDir))
+
+	target := filepath.Join(installDir, "libllama-common.so.0.0.9180")
+	alias := filepath.Join(installDir, "libllama-common.so.0")
+	assert.FileExists(t, target)
+	assert.FileExists(t, alias)
+
+	data, err := os.ReadFile(alias)
+	require.NoError(t, err)
+	assert.Equal(t, []byte("real-lib"), data)
+
+	if runtime.GOOS != "windows" {
+		fi, err := os.Lstat(alias)
+		require.NoError(t, err)
+		assert.True(t, fi.Mode()&os.ModeSymlink != 0 || fi.Mode().IsRegular())
+	}
+}
+
 func TestExtractFromTarGz_FallbackWithoutExe(t *testing.T) {
 	dir := t.TempDir()
 	archive := filepath.Join(dir, "llama.tar.gz")
@@ -205,6 +233,22 @@ func writeZipArchive(path string, entries map[string][]byte) error {
 }
 
 func writeTarGzArchive(path string, entries map[string][]byte) error {
+	tarEntries := make([]tarArchiveEntry, 0, len(entries))
+	for name, content := range entries {
+		tarEntries = append(tarEntries, tarArchiveEntry{Name: name, Content: content, Mode: 0o644})
+	}
+	return writeTarGzArchiveEntries(path, tarEntries)
+}
+
+type tarArchiveEntry struct {
+	Name     string
+	Content  []byte
+	Typeflag byte
+	Linkname string
+	Mode     int64
+}
+
+func writeTarGzArchiveEntries(path string, entries []tarArchiveEntry) error {
 	f, err := os.Create(path)
 	if err != nil {
 		return err
@@ -217,17 +261,33 @@ func writeTarGzArchive(path string, entries map[string][]byte) error {
 	tw := tar.NewWriter(gz)
 	defer func() { _ = tw.Close() }()
 
-	for name, content := range entries {
+	for _, entry := range entries {
+		typeflag := entry.Typeflag
+		if typeflag == 0 {
+			typeflag = tar.TypeReg
+		}
+		mode := entry.Mode
+		if mode == 0 {
+			mode = 0o644
+		}
+		size := int64(0)
+		if typeflag == tar.TypeReg {
+			size = int64(len(entry.Content))
+		}
 		hdr := &tar.Header{
-			Name: name,
-			Mode: 0o644,
-			Size: int64(len(content)),
+			Name:     entry.Name,
+			Mode:     mode,
+			Size:     size,
+			Typeflag: typeflag,
+			Linkname: entry.Linkname,
 		}
 		if err := tw.WriteHeader(hdr); err != nil {
 			return err
 		}
-		if _, err := io.Copy(tw, bytes.NewReader(content)); err != nil {
-			return err
+		if typeflag == tar.TypeReg && size > 0 {
+			if _, err := io.Copy(tw, bytes.NewReader(entry.Content)); err != nil {
+				return err
+			}
 		}
 	}
 

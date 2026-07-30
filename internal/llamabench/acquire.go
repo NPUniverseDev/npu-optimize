@@ -382,6 +382,11 @@ func extractBundleFromTarGz(archivePath, targetName, dstDir string) error {
 	if err != nil {
 		return err
 	}
+	type pendingSymlink struct {
+		name     string
+		linkname string
+	}
+	var symlinks []pendingSymlink
 
 	f, err := os.Open(archivePath)
 	if err != nil {
@@ -417,6 +422,18 @@ func extractBundleFromTarGz(archivePath, targetName, dstDir string) error {
 			continue
 		}
 
+		if hdr.Typeflag == tar.TypeSymlink {
+			symlinks = append(symlinks, pendingSymlink{
+				name:     baseName,
+				linkname: filepath.Base(hdr.Linkname),
+			})
+			continue
+		}
+
+		if hdr.Typeflag != tar.TypeReg {
+			continue
+		}
+
 		dstPath := filepath.Join(dstDir, baseName)
 		if isBench {
 			if err := writeExecutable(dstPath, tr); err != nil {
@@ -426,6 +443,28 @@ func extractBundleFromTarGz(archivePath, targetName, dstDir string) error {
 		}
 		if err := writeRegularFile(dstPath, tr); err != nil {
 			return err
+		}
+	}
+
+	for _, s := range symlinks {
+		if s.linkname == "" {
+			continue
+		}
+		dstPath := filepath.Join(dstDir, s.name)
+		targetPath := filepath.Join(dstDir, s.linkname)
+
+		_ = os.Remove(dstPath)
+		if runtime.GOOS == "windows" {
+			if err := copyFile(targetPath, dstPath); err != nil {
+				return fmt.Errorf("materialize runtime link %s -> %s: %w", s.name, s.linkname, err)
+			}
+			continue
+		}
+
+		if err := os.Symlink(s.linkname, dstPath); err != nil {
+			if copyErr := copyFile(targetPath, dstPath); copyErr != nil {
+				return fmt.Errorf("create runtime symlink %s -> %s: %w", s.name, s.linkname, err)
+			}
 		}
 	}
 
@@ -538,6 +577,25 @@ func writeRegularFile(dstPath string, src io.Reader) error {
 	defer func() { _ = f.Close() }()
 	if _, err := io.Copy(f, src); err != nil {
 		return fmt.Errorf("write output file: %w", err)
+	}
+	return nil
+}
+
+func copyFile(srcPath, dstPath string) error {
+	src, err := os.Open(srcPath)
+	if err != nil {
+		return fmt.Errorf("open source file: %w", err)
+	}
+	defer func() { _ = src.Close() }()
+
+	dst, err := os.Create(dstPath)
+	if err != nil {
+		return fmt.Errorf("create destination file: %w", err)
+	}
+	defer func() { _ = dst.Close() }()
+
+	if _, err := io.Copy(dst, src); err != nil {
+		return fmt.Errorf("copy file contents: %w", err)
 	}
 	return nil
 }
