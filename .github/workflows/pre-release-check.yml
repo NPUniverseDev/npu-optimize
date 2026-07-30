@@ -1,0 +1,123 @@
+name: Pre-release Check
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.head_ref, 'release-please')
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version: "1.26"
+          cache: true
+
+      - name: Go vet
+        run: go vet ./...
+
+      - name: Go tests
+        run: go test ./... -v -count=1
+
+      - name: Build CLI binary
+        shell: pwsh
+        run: |
+          if ($env:RUNNER_OS -eq "Windows") {
+            go build -o npu-optimize.exe ./cmd/npu-optimize
+          } else {
+            go build -o npu-optimize ./cmd/npu-optimize
+          }
+
+      - name: Smoke help commands
+        shell: pwsh
+        run: |
+          $bin = if ($env:RUNNER_OS -eq "Windows") { ".\\npu-optimize.exe" } else { "./npu-optimize" }
+          & $bin --help
+          if ($LASTEXITCODE -ne 0) { throw "root --help failed with exit code $LASTEXITCODE" }
+          & $bin detect --help
+          if ($LASTEXITCODE -ne 0) { throw "detect --help failed with exit code $LASTEXITCODE" }
+          & $bin benchmark --help
+          if ($LASTEXITCODE -ne 0) { throw "benchmark --help failed with exit code $LASTEXITCODE" }
+
+      - name: E2E detect JSON
+        shell: pwsh
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          NPU_OPTIMIZE_TOKEN: ${{ secrets.NPU_OPTIMIZE_TOKEN }}
+        run: |
+          $bin = if ($env:RUNNER_OS -eq "Windows") { ".\\npu-optimize.exe" } else { "./npu-optimize" }
+          & $bin detect --mode cpu --output json 1> detect.json 2> detect.err
+          if ($LASTEXITCODE -ne 0 -and $LASTEXITCODE -ne 2) {
+            Get-Content detect.err
+            throw "detect command failed with exit code $LASTEXITCODE"
+          }
+
+          $raw = Get-Content detect.json -Raw
+          $obj = $raw | ConvertFrom-Json
+
+          if (-not $obj.'$schema') { throw "detect output missing `$schema" }
+          if ($obj.version -lt 1) { throw "detect output has invalid version: $($obj.version)" }
+          if ($obj.mode_used -ne "cpu") { throw "detect mode_used expected cpu, got: $($obj.mode_used)" }
+          if (-not $obj.hardware) { throw "detect output missing hardware" }
+          if (-not $obj.hardware.cpu) { throw "detect output missing hardware.cpu" }
+          if ($obj.hardware.cpu.cores -le 0) { throw "detect output invalid cpu cores" }
+          if ($obj.hardware.ram_free_mb -le 0) { throw "detect output invalid ram_free_mb" }
+          if (-not $obj.backend) { throw "detect output missing backend" }
+
+      - name: E2E detect text
+        shell: pwsh
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          NPU_OPTIMIZE_TOKEN: ${{ secrets.NPU_OPTIMIZE_TOKEN }}
+        run: |
+          $bin = if ($env:RUNNER_OS -eq "Windows") { ".\\npu-optimize.exe" } else { "./npu-optimize" }
+          & $bin detect --mode cpu --output text 1> detect.txt 2> detect-text.err
+          if ($LASTEXITCODE -ne 0 -and $LASTEXITCODE -ne 2) {
+            Get-Content detect-text.err
+            throw "detect text command failed with exit code $LASTEXITCODE"
+          }
+          $text = Get-Content detect.txt -Raw
+          if ([string]::IsNullOrWhiteSpace($text)) { throw "detect text output is empty" }
+
+      - name: E2E benchmark JSON
+        shell: pwsh
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          NPU_OPTIMIZE_TOKEN: ${{ secrets.NPU_OPTIMIZE_TOKEN }}
+        run: |
+          $bin = if ($env:RUNNER_OS -eq "Windows") { ".\\npu-optimize.exe" } else { "./npu-optimize" }
+          & $bin benchmark --mode cpu --min-ts 0 --output json 1> benchmark.json 2> benchmark.err
+          if ($LASTEXITCODE -ne 0 -and $LASTEXITCODE -ne 2) {
+            Get-Content benchmark.err
+            throw "benchmark command failed with exit code $LASTEXITCODE"
+          }
+
+          $raw = Get-Content benchmark.json -Raw
+          $obj = $raw | ConvertFrom-Json
+
+          if (-not $obj.'$schema') { throw "benchmark output missing `$schema" }
+          if ($obj.version -ne 4) { throw "benchmark output expected version 4, got: $($obj.version)" }
+          if ($obj.mode_used -ne "cpu") { throw "benchmark mode_used expected cpu, got: $($obj.mode_used)" }
+          if (-not $obj.hardware) { throw "benchmark output missing hardware" }
+          if (-not $obj.proxy_benchmark) { throw "benchmark output missing proxy_benchmark" }
+          if (-not $obj.proxy_benchmark.model) { throw "benchmark output missing proxy_benchmark.model" }
+          if ($obj.proxy_benchmark.ts_proxy -le 0) { throw "benchmark output invalid proxy_benchmark.ts_proxy" }
+          if ($obj.proxy_benchmark.effective_bandwidth_gbs -le 0) { throw "benchmark output invalid effective_bandwidth_gbs" }
+          if (-not $obj.llama_bench) { throw "benchmark output missing llama_bench" }
