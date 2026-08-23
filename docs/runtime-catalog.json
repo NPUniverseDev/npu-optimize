@@ -1,6 +1,6 @@
 {
   "version": "1",
-  "updated_at": "2026-08-16T23:15:11Z",
+  "updated_at": "2026-08-23T23:16:13Z",
   "sources": [
     {
       "name": "ggml-org/llama.cpp",
@@ -211,10 +211,10 @@
           "platform": "android",
           "arch": "arm64",
           "backend": "vulkan",
-          "version": "daily-2026-08-12",
-          "download_url": "https://github.com/Ericson246/llama.cpp/releases/download/daily-2026-08-12/llama-daily-2026-08-12-bin-android-arm64.tar.gz",
+          "version": "daily-2026-08-22",
+          "download_url": "https://github.com/Ericson246/llama.cpp/releases/download/daily-2026-08-22/llama-daily-2026-08-22-bin-android-arm64.tar.gz",
           "sha256": "",
-          "size_bytes": 97359391,
+          "size_bytes": 92597848,
           "format": "tar.gz",
           "source_name": "Ericson246/llama.cpp"
         }
