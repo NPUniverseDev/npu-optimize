@@ -56,11 +56,20 @@ jobs:
           & $bin benchmark --help
           if ($LASTEXITCODE -ne 0) { throw "benchmark --help failed with exit code $LASTEXITCODE" }
 
+      - name: Cache llama-bench
+        uses: actions/cache@v4
+        with:
+          path: ~/.npu-optimize/bin
+          key: llama-bench-${{ runner.os }}-${{ runner.arch }}-b11177
+          restore-keys: |
+            llama-bench-${{ runner.os }}-${{ runner.arch }}-
+
       - name: E2E detect JSON
         shell: pwsh
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
           NPU_OPTIMIZE_TOKEN: ${{ secrets.NPU_OPTIMIZE_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           $bin = if ($env:RUNNER_OS -eq "Windows") { ".\\npu-optimize.exe" } else { "./npu-optimize" }
           & $bin detect --mode cpu --output json 1> detect.json 2> detect.err
@@ -101,6 +110,7 @@ jobs:
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
           NPU_OPTIMIZE_TOKEN: ${{ secrets.NPU_OPTIMIZE_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           $bin = if ($env:RUNNER_OS -eq "Windows") { ".\\npu-optimize.exe" } else { "./npu-optimize" }
           & $bin detect --mode cpu --output text 1> detect.txt 2> detect-text.err
@@ -132,6 +142,8 @@ jobs:
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
           NPU_OPTIMIZE_TOKEN: ${{ secrets.NPU_OPTIMIZE_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           $bin = if ($env:RUNNER_OS -eq "Windows") { ".\\npu-optimize.exe" } else { "./npu-optimize" }
           & $bin benchmark --mode cpu --min-ts 0 --output json 1> benchmark.json 2> benchmark.err

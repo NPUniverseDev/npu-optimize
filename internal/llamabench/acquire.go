@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"time"
 
 	"github.com/Ericson246/npu-optimize/internal/constants"
 )
@@ -94,14 +95,27 @@ func (a *Acquirer) downloadTo(installDir string) error {
 		return fmt.Errorf("build release request: %w", err)
 	}
 	req.Header.Set("Accept", "application/vnd.github+json")
+	if token := githubToken(); token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
+	req.Header.Set("User-Agent", constants.UserAgent)
+	req.Header.Set("X-GitHub-Api-Version", "2022-11-28")
 
-	resp, err := a.client().Do(req)
+	resp, err := doWithRetry(a.client(), req)
 	if err != nil {
 		return fmt.Errorf("request release metadata: %w", err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("release metadata request failed with status %d", resp.StatusCode)
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		hint := ""
+		if resp.StatusCode == 403 || resp.StatusCode == 429 {
+			hint = " (rate limited — set GITHUB_TOKEN/GH_TOKEN to increase quota)"
+		}
+		if len(body) > 0 {
+			return fmt.Errorf("release metadata request failed with status %d%s: %s", resp.StatusCode, hint, strings.TrimSpace(string(body)))
+		}
+		return fmt.Errorf("release metadata request failed with status %d%s", resp.StatusCode, hint)
 	}
 
 	body, err := io.ReadAll(resp.Body)
@@ -166,9 +180,54 @@ func (a *Acquirer) downloadTo(installDir string) error {
 	return nil
 }
 
+func githubToken() string {
+	for _, k := range []string{"GITHUB_TOKEN", "GH_TOKEN", "GH_RELEASE_TOKEN"} {
+		if v := strings.TrimSpace(os.Getenv(k)); v != "" {
+			return v
+		}
+	}
+	return ""
+}
+
+func doWithRetry(client *http.Client, req *http.Request) (*http.Response, error) {
+	// Single retry for transient 429/403 rate-limit with short backoff.
+	for attempt := 0; attempt < 2; attempt++ {
+		resp, err := client.Do(req)
+		if err != nil {
+			return nil, err
+		}
+		if resp.StatusCode != 429 && resp.StatusCode != 403 {
+			return resp, nil
+		}
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
+		_ = resp.Body.Close()
+		if attempt == 1 {
+			// Return synthetic response with original status for caller to report.
+			return &http.Response{
+				StatusCode: resp.StatusCode,
+				Header:     resp.Header,
+				Body:       io.NopCloser(strings.NewReader(string(body))),
+			}, nil
+		}
+		time.Sleep(time.Duration(2+attempt*3) * time.Second)
+		// Clone request for retry (GET has no body).
+		req2, _ := http.NewRequest(req.Method, req.URL.String(), nil)
+		for k, vv := range req.Header {
+			for _, v := range vv {
+				req2.Header.Add(k, v)
+			}
+		}
+		req = req2
+	}
+	return nil, fmt.Errorf("retry exhausted")
+}
+
 func (a *Acquirer) client() *http.Client {
 	if a.HTTPClient == nil {
-		a.HTTPClient = &http.Client{}
+		a.HTTPClient = &http.Client{Timeout: 30 * time.Second}
+	}
+	if a.HTTPClient.Timeout == 0 {
+		a.HTTPClient.Timeout = 30 * time.Second
 	}
 	return a.HTTPClient
 }
@@ -256,6 +315,10 @@ func (a *Acquirer) fetchFile(url, dst string) error {
 	if err != nil {
 		return fmt.Errorf("build download request: %w", err)
 	}
+	if token := githubToken(); token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
+	req.Header.Set("User-Agent", constants.UserAgent)
 	resp, err := a.client().Do(req)
 	if err != nil {
 		return fmt.Errorf("download llama-bench asset: %w", err)

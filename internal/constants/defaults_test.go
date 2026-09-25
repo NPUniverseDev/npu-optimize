@@ -25,7 +25,7 @@ func TestHFConstants(t *testing.T) {
 }
 
 func TestLlamaBench(t *testing.T) {
-	assert.Equal(t, "b9180", LlamaBenchVersion)
+	assert.Equal(t, "b11177", LlamaBenchVersion)
 	assert.Equal(t, "ggml-org/llama.cpp", LlamaBenchRepo)
 }
 

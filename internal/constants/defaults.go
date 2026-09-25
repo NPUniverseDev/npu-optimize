@@ -16,7 +16,7 @@ const (
 	HFAPIBaseURL = "https://huggingface.co"
 	HFAPIHost    = "huggingface.co"
 
-	LlamaBenchVersion = "b9180"
+	LlamaBenchVersion = "b11177"
 	LlamaBenchRepo    = "ggml-org/llama.cpp"
 
 	CacheDir      = ".npu-optimize"
