@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.4.1](https://github.com/NPUniverseDev/npu-optimize/compare/v0.4.0...v0.4.1) (2026-09-25)
+
+
+### Bug Fixes
+
+* **llamabench:** token-aware authenticated download with retry and cache, bump bench to b11177 ([5ff28a0](https://github.com/NPUniverseDev/npu-optimize/commit/5ff28a0bd1eb4692cbde64387df048578b48fd4b))
+* **sync-catalog:** stable fuzzy matching for renamed assets, alias migration and v0.5.0 fallback ([495a4b0](https://github.com/NPUniverseDev/npu-optimize/commit/495a4b0b4222db907b3b9d0bbcb638a61f80a5d0))
+
 ## [0.4.0](https://github.com/NPUniverseDev/npu-optimize/compare/v0.3.2...v0.4.0) (2026-07-30)
 
 
