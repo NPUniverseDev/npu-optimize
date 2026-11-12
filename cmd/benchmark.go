@@ -247,12 +247,12 @@ func runBenchmark() error {
 	client := hfclient.NewClient(tok)
 	client.SetCache(cache.New(filepath.Join(homeDir, constants.CacheDir)))
 
-	svc := recommend.NewService(client, recommend.Config{
+	svc := withCatalogSource(recommend.NewService(client, recommend.Config{
 		CtxSize:           bmCtxSize,
 		VRAMMargin:        effectiveMargin,
 		Mode:              bmMode,
 		AvailableMemoryMB: cfg.availableMemoryMB,
-	})
+	}))
 
 	stgRecommend := applog.StartStage("benchmark", "recommend_model")
 	rec, err := svc.Recommend(hw)

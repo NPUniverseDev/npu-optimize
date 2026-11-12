@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/Ericson246/npu-optimize/internal/calculator"
+	"github.com/Ericson246/npu-optimize/internal/catalog"
 	"github.com/Ericson246/npu-optimize/internal/hfclient"
 	"github.com/Ericson246/npu-optimize/internal/hwinfo"
 )
@@ -68,6 +69,7 @@ func (c candidate) sizeOf(file string) int64 {
 
 type Service struct {
 	hfClient *hfclient.Client
+	catalog  *catalog.Client
 	config   Config
 }
 
@@ -76,6 +78,13 @@ func NewService(hf *hfclient.Client, config Config) *Service {
 		hfClient: hf,
 		config:   config,
 	}
+}
+
+// WithCatalog activa el descubrimiento vía catálogo propio.
+// Si es nil, se usa Hugging Face directo.
+func (s *Service) WithCatalog(c *catalog.Client) *Service {
+	s.catalog = c
+	return s
 }
 
 func (s *Service) Recommend(hw *hwinfo.Info) (*Recommendation, error) {
@@ -149,6 +158,15 @@ func (s *Service) resolveMemoryMB(hw *hwinfo.Info) int64 {
 }
 
 func (s *Service) searchModels(paramsStr string) ([]hfclient.ModelInfo, error) {
+	if s.catalog != nil {
+		formats, err := s.catalog.FetchFormats()
+		if err != nil {
+			return nil, err
+		}
+		models := catalog.ToModelInfos(formats)
+		slog.Debug("catalog source: models discovered", "count", len(models))
+		return models, nil
+	}
 	return s.hfClient.SearchModels("gguf", paramsStr, 200)
 }
 

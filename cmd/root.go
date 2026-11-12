@@ -2,9 +2,13 @@ package cmd
 
 import (
 	"log/slog"
+	"net/http"
 	"os"
+	"time"
 
+	"github.com/Ericson246/npu-optimize/internal/catalog"
 	"github.com/Ericson246/npu-optimize/internal/logger"
+	"github.com/Ericson246/npu-optimize/internal/recommend"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -19,6 +23,7 @@ var (
 	llamaBenchVersion string
 	logFormat         string
 	runtimeCatalogURL string
+	sourceMode        string
 )
 
 var rootCmd = &cobra.Command{
@@ -53,6 +58,7 @@ func init() {
 	pf.StringVar(&llamaBenchVersion, "llama-bench-version", "b9180", "llama-bench version to use")
 	pf.StringVar(&logFormat, "log-format", "text", "Log format: text or json")
 	pf.StringVar(&runtimeCatalogURL, "runtime-catalog-url", "", "Override runtime catalog URL (empty uses embedded catalog)")
+	pf.StringVar(&sourceMode, "source", "", "Model discovery: auto|catalog|hf (default auto; also NPU_OPTIMIZE_SOURCE)")
 
 	_ = viper.BindPFlag("token", pf.Lookup("token"))
 	_ = viper.BindPFlag("model_dir", pf.Lookup("model-dir"))
@@ -108,4 +114,44 @@ func getRuntimeCatalogURL() string {
 		return u
 	}
 	return ""
+}
+
+// getSource resuelve la fuente de descubrimiento: flag > env > auto.
+func getSource() string {
+	if sourceMode != "" {
+		return sourceMode
+	}
+	if v := os.Getenv("NPU_OPTIMIZE_SOURCE"); v != "" {
+		return v
+	}
+	return "auto"
+}
+
+func catalogBaseURL() string {
+	if u := os.Getenv("NPU_OPTIMIZE_CATALOG_URL"); u != "" {
+		return u
+	}
+	return catalog.DefaultBaseURL
+}
+
+// withCatalogSource conecta el catálogo propio según --source.
+// auto: prueba /v1/health y cae a HF si no responde. catalog|hf: forzado.
+func withCatalogSource(svc *recommend.Service) *recommend.Service {
+	switch getSource() {
+	case "hf":
+		return svc
+	case "catalog":
+		return svc.WithCatalog(catalog.NewClient(catalogBaseURL()))
+	default:
+		c := &http.Client{Timeout: 8 * time.Second}
+		if resp, err := c.Get(catalogBaseURL() + "/v1/health"); err == nil {
+			resp.Body.Close()
+			if resp.StatusCode == 200 {
+				return svc.WithCatalog(catalog.NewClient(catalogBaseURL()))
+			}
+		} else {
+			slog.Debug("catalog unreachable, using HuggingFace", "err", err)
+		}
+		return svc
+	}
 }

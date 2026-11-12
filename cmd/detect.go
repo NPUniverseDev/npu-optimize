@@ -324,12 +324,12 @@ func runDetect() error {
 	cacheDir, _ := os.UserHomeDir()
 	client.SetCache(cache.New(filepath.Join(cacheDir, constants.CacheDir)))
 
-	svc := recommend.NewService(client, recommend.Config{
+	svc := withCatalogSource(recommend.NewService(client, recommend.Config{
 		CtxSize:           ctxSize,
 		VRAMMargin:        effectiveMargin,
 		Mode:              mode,
 		AvailableMemoryMB: cfg.availableMemoryMB,
-	})
+	}))
 
 	stgRecommend := applog.StartStage("detect", "recommend_model")
 	rec, err := svc.Recommend(hw)
